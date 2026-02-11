@@ -6,3 +6,4 @@ openpyxl
 scipy
 mplcursors
 xlrd>=2.0.1  # 可选：如果需要支持 .xls 格式
+.idea
