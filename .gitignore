@@ -1,0 +1,8 @@
+PySide6
+matplotlib
+pandas
+numpy
+openpyxl
+scipy
+mplcursors
+xlrd>=2.0.1  # 可选：如果需要支持 .xls 格式
