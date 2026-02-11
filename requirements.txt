@@ -1,7 +1,0 @@
-PySide6
-matplotlib
-pandas
-numpy
-openpyxl
-scipy
-mplcursors
