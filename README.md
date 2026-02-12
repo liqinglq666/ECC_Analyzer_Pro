@@ -134,7 +134,7 @@ An automated, physics-informed scientific tool for characterizing tensile & comp
    * **注意**：请务必保持模板首行的**列名关键词**（如 `Stress`, `Strain`）不变。
 
 3. **一键分析**：
-   运行 [ECC_Analyzer_Pro.exe](https://github.com/liqinglq666/liqinglq666/ECC_Analyzer_Pro/releases/tag/v1.0)，在软件界面选择对应的试验类型并导入您修改后的文件即可。
+   运行 [ECC_Analyzer_Pro.exe](https://github.com/liqinglq666/ECC_Analyzer_Pro/releases/tag/v1.0)，在软件界面选择对应的试验类型并导入您修改后的文件即可。
 
 > **💡 小建议**：
 > 如果您的原始数据列名与模板不一致，只需在 Excel 中将表头修改为与 Demo 文件一致，程序即可自动识别，无需手动调整数据顺序。
