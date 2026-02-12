@@ -1,16 +1,15 @@
 import sys
+import os
 import traceback
 from pathlib import Path
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import Qt
-
 
 # 全局异常捕获函数 (防止程序无声崩溃)
 def exception_hook(exctype, value, tb):
     error_msg = "".join(traceback.format_exception(exctype, value, tb))
     print("CRITICAL ERROR:", error_msg)
 
-    # 尝试弹窗显示错误 (只有在 QApplication 启动后才能弹窗)
     if QApplication.instance():
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Critical)
@@ -18,33 +17,37 @@ def exception_hook(exctype, value, tb):
         msg.setText("An unexpected error occurred.\n程序发生意外错误。")
         msg.setDetailedText(error_msg)
         msg.exec()
-
-    # 保持非零退出码，方便 IDE 识别错误
     sys.exit(1)
-
 
 sys.excepthook = exception_hook
 
+def get_resource_path(relative_path):
+    """ 获取资源的绝对路径，兼容开发环境与 PyInstaller 打包环境 """
+    if hasattr(sys, '_MEIPASS'):
+        # PyInstaller 打包后的临时解压路径
+        return Path(sys._MEIPASS) / relative_path
+    # 普通开发环境路径
+    return Path(os.path.abspath(".")) / relative_path
 
 def main():
     # 1. 创建应用实例
     app = QApplication(sys.argv)
     app.setApplicationName("ECC Analyzer Pro")
 
-    # [Fix] Qt 6 默认已开启 High DPI，移除废弃的 setAttribute 以消除警告
-    # 仅在极少数特殊情况下需要手动调整缩放策略
+    # 高 DPI 支持
     if hasattr(Qt, 'HighDpiScaleFactorRoundingPolicy'):
         app.setHighDpiScaleFactorRoundingPolicy(
             Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
         )
 
-    # 2. 延迟导入主窗口 (确保 excepthook 已生效)
     try:
-        # 检查关键目录是否存在
-        root_dir = Path(__file__).parent
-        if not (root_dir / "app").exists():
-            raise FileNotFoundError("Critical folder 'app' not found in project root.")
+        # [Critical Fix] 动态调整 Python 搜索路径
+        # 确保打包后程序能找到解压后的 app 文件夹
+        resource_root = get_resource_path("")
+        if str(resource_root) not in sys.path:
+            sys.path.insert(0, str(resource_root))
 
+        # 2. 延迟导入主窗口
         from app.ui.main_window import MainWindow
 
         # 3. 初始化并显示
@@ -55,15 +58,13 @@ def main():
         sys.exit(app.exec())
 
     except ImportError as e:
-        err_str = f"Missing required files.\n缺少必要模块: {e}\n\nPlease check your 'app' folder structure."
+        err_str = f"Module not found: {e}\n\n请确保打包时已包含 'app' 文件夹。"
         print(err_str)
-        QMessageBox.critical(None, "Import Error", err_str)
+        if QApplication.instance():
+            QMessageBox.critical(None, "Import Error", err_str)
         sys.exit(1)
-
     except Exception as e:
-        # 手动触发异常处理
         exception_hook(type(e), e, e.__traceback__)
-
 
 if __name__ == "__main__":
     main()

@@ -113,6 +113,10 @@ An automated, physics-informed scientific tool for characterizing tensile & comp
 * **Columns B+**: 该组样品对应的抗压强度值。支持每组样本数量不一致。
 
 ---
+### 📖 数据排版指南
+如果您不确定如何整理您的实验数据，请查看 [raw_data 数据格式说明](raw_data/README.md)。您可以直接下载目录下的 Demo 文件，将您的数据粘贴进去即可直接使用。
+
+---
 
 ## 📊 指标解读 (Metrics Explained)
 
@@ -139,6 +143,14 @@ An automated, physics-informed scientific tool for characterizing tensile & comp
 > 💡 **Tips**:
 > * High Strength, Low COV: 理想结果，表明纤维分散均匀。
 > * **High Strength, High COV**: 可能存在离群值或振捣不均，建议检查原始数据。
+
+---
+## 🚀 快速开始 (Quick Start)
+
+###  下载运行 (Windows)
+您可以直接从 [Releases](https://github.com/liqinglq666/ECC_Analyzer_Pro/releases) 页面下载编译好的 `ECC_Analyzer_Pro.exe`。
+* **无需安装 Python 环境**，双击即可运行。
+* *注意：如遇系统拦截，请选择“仍要运行”。*
 
 ---
 
