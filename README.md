@@ -70,10 +70,14 @@ An automated, physics-informed scientific tool for characterizing tensile & comp
   $$E_{tan} < 0.85 \cdot E_{init}$$
 
 ### 3. 多缝机制与能量量化 (Ductility & Energy)
-* **多缝发展区间 ($\Delta \varepsilon_{SH}$)**：$\Delta \varepsilon_{SH} = \varepsilon_u - \varepsilon_{cr}$，直接量化材料“能稳定开多少裂缝”。
-* **平台稳定性系数 ($CV_{\sigma}$)**：计算硬化段应力的变异系数。$CV$ 越小，表明多缝开展过程越平稳。
-* **断裂能 ($G_F$)**：基于 Simpson 积分和标距转换：
+
+* **多缝发展区间 ($\Delta \varepsilon_{SH}$)**：直接量化材料“能稳定开多少裂缝”的能力。
+  $$\Delta \varepsilon_{SH} = \varepsilon_u - \varepsilon_{cr}$$
   
+* **平台稳定性系数 ($CV_{\sigma}$)**：计算硬化段应力的变异系数。$CV$ 越小，表明多缝开展过程越平稳。
+
+* **断裂能 ($G_F$)**：基于 Simpson 积分和标距（Gauge Length）转换：
+  $$G_F = \left( \int_{0}^{\varepsilon_u} \sigma \, d\varepsilon \right) \times L_0$$
   $$G_F = \int \sigma d\varepsilon \times L_0$$
 
 ---
