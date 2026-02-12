@@ -26,7 +26,7 @@ An automated, physics-informed scientific tool for characterizing tensile & comp
 
 ---
 
-## 🖥️ 界面概览 (Interface Overview)SS
+## 🖥️ 界面概览 (Interface Overview)
 
 软件界面采用 "Data-Vis Split" (左数据-右视觉) 的现代布局，专为高效率科研工作流设计。
 
