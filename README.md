@@ -30,9 +30,9 @@ An automated, physics-informed scientific tool for characterizing tensile & comp
 
 软件界面采用 "Data-Vis Split" (左数据-右视觉) 的现代布局，专为高效率科研工作流设计。
 
-![img.png](img.png)
+![img.png](assets/screenshots/img.png)
 
-![img_1.png](img_1.png)
+![img_1.png](assets/screenshots/img_1.png)
 
 ### 1️⃣ 全局控制 (Global Control)
 * Mode Selector: `Tensile` / `Compressive` 双模式一键切换。
@@ -54,26 +54,27 @@ An automated, physics-informed scientific tool for characterizing tensile & comp
 
 ## 🔬 核心算法：物理定义的重构 (Scientific Core)
 
-超越传统唯象拟合的局限，本工具搭载了 物理驱动的本构解析引擎 (Physics-Informed Constitutive Engine)。
+超越传统唯象拟合的局限，本工具搭载了 **物理驱动的本构解析引擎 (Physics-Informed Constitutive Engine)**。
 
 ### 1. 双模量策略 (Dual-Modulus Strategy)
 * **初始弹性模量 ($E_{init}$)**：对平滑后的应力-应变曲线进行数值微分，选取加载初期最大的 10% 切线模量进行统计平均。真实反映未损伤基体刚度。
 * **有效弹性模量 ($E_{eff}$)**：在用户可配的应力区间（默认 10%–40% 峰值）内，采用线性回归计算割线响应。作为工程设计的刚度输入。
 
 ### 2. 首裂判据：主辅耦合机制 (Dual-Criterion Strategy)
-* 主判据 (Master) - 线性偏离：当实验应力显著偏离 $E_{eff}$ 预测轨迹时触发预警：
-    $$
-    \sigma_{theory} - \sigma_{exp} > \delta_{tol}
-    $$
+* **主判据 (Master) - 线性偏离**：当实验应力显著偏离 $E_{eff}$ 预测轨迹时触发预警：
+  
+  $$\sigma_{theory} - \sigma_{exp} > \delta_{tol}$$
+
 * **辅判据 (Slave) - 刚度衰减**：仅当实时切线模量发生实质性退化时确认开裂：
-    $$
-    E_{tan} < 0.85 \cdot E_{init}
-    $$
+  
+  $$E_{tan} < 0.85 \cdot E_{init}$$
 
 ### 3. 多缝机制与能量量化 (Ductility & Energy)
 * **多缝发展区间 ($\Delta \varepsilon_{SH}$)**：$\Delta \varepsilon_{SH} = \varepsilon_u - \varepsilon_{cr}$，直接量化材料“能稳定开多少裂缝”。
 * **平台稳定性系数 ($CV_{\sigma}$)**：计算硬化段应力的变异系数。$CV$ 越小，表明多缝开展过程越平稳。
-* **断裂能 ($G_F$)**：基于 Simpson 积分和标距转换，$G_F = \int \sigma d\varepsilon \times L_0$。
+* **断裂能 ($G_F$)**：基于 Simpson 积分和标距转换：
+  
+  $$G_F = \int \sigma d\varepsilon \times L_0$$
 
 ---
 
