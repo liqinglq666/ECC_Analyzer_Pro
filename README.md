@@ -113,9 +113,31 @@ An automated, physics-informed scientific tool for characterizing tensile & comp
 * **Columns B+**: 该组样品对应的抗压强度值。支持每组样本数量不一致。
 
 ---
-### 📖 数据排版指南
-如果您不确定如何整理您的实验数据，请查看 [raw_data 数据格式说明](raw_data/README.md)。您可以直接下载目录下的 Demo 文件，将您的数据粘贴进去即可直接使用。
+## 🚀 下载与安装 (Download)
 
+### 1. 下载运行 (Windows - 推荐)
+您可以直接从 **[Latest Release (v1.0)](https://github.com/liqinglq666/ECC_Analyzer_Pro/releases/tag/v1.0)** 页面下载编译好的 `ECC_Analyzer_Pro.exe`。
+* **开箱即用**：无需安装 Python 环境，双击即可运行。
+* **注意**：由于未进行数字签名，Windows Defender 可能会弹出安全提醒，请点击“更多信息”并选择“仍要运行”。
+
+### 2. 数据准备 (Data Preparation)
+
+本程序支持 **单轴拉伸 (Tensile)** 与 **抗压(Compression)** 两种试验数据的自动解析。为了确保导入成功，推荐采用“模板替换”法：
+
+1. **选择并下载模板**：
+   前往 [raw_data 示例目录](https://github.com/liqinglq666/ECC_Analyzer_Pro/tree/main/raw_data) 下载对应的 Demo 文件：
+   * **拉伸试验**：使用 `demo_tensile.xlsx`
+   * **抗压试验**：使用 `demo_compression.xlsx`
+
+2. **排版数据**：
+   将您实验所得的原始数据（应力、应变、荷载等）直接粘贴到对应模板的列中。
+   * **注意**：请务必保持模板首行的**列名关键词**（如 `Stress`, `Strain`）不变。
+
+3. **一键分析**：
+   运行 [ECC_Analyzer_Pro.exe](https://github.com/liqinglq666/liqinglq666/ECC_Analyzer_Pro/releases/tag/v1.0)，在软件界面选择对应的试验类型并导入您修改后的文件即可。
+
+> **💡 小建议**：
+> 如果您的原始数据列名与模板不一致，只需在 Excel 中将表头修改为与 Demo 文件一致，程序即可自动识别，无需手动调整数据顺序。
 ---
 
 ## 📊 指标解读 (Metrics Explained)
