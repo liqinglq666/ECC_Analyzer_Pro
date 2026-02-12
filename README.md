@@ -167,14 +167,6 @@ An automated, physics-informed scientific tool for characterizing tensile & comp
 > * **High Strength, High COV**: 可能存在离群值或振捣不均，建议检查原始数据。
 
 ---
-## 🚀 快速开始 (Quick Start)
-
-###  下载运行 (Windows)
-您可以直接从 [Releases](https://github.com/liqinglq666/ECC_Analyzer_Pro/releases) 页面下载编译好的 `ECC_Analyzer_Pro.exe`。
-* **无需安装 Python 环境**，双击即可运行。
-* *注意：如遇系统拦截，请选择“仍要运行”。*
-
----
 
 ## 🛠️ 安装与使用 (Installation)
 
