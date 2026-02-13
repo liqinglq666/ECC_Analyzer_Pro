@@ -74,7 +74,7 @@ An automated, physics-informed scientific tool for characterizing tensile & comp
 * **多缝发展区间 ($\Delta \varepsilon_{SH}$)**：直接量化材料“能稳定开多少裂缝”的能力。
   $$\Delta \varepsilon_{SH} = \varepsilon_u - \varepsilon_{cr}$$
   
-* **平台稳定性系数 ($CV_{\sigma}$)**：计算硬化段应力的变异系数。$CV$ 越小，表明多缝开展过程越平稳。
+* **平台稳定性系数 ($CV_{\sigma}$)**：计算硬化段应力的变异系数 $CV_{\sigma}$ 越小，表明多缝开展过程越平稳。
 
 * **断裂能 ($G_F$)**：基于 Simpson 积分和标距（Gauge Length）转换：
   $$G_F = \left( \int_{0}^{\varepsilon_u} \sigma \, d\varepsilon \right) \times L_0$$
