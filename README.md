@@ -9,7 +9,7 @@
 
 **一个面向 ECC / SHCC 拉伸与抗压试验数据的科研分析小工具。**
 
-它不是为了做一个“万能材料软件”，而是为了解决我自己在整理 ECC 试验数据时反复遇到的几个麻烦：曲线太多、初裂点难统一、应变单位容易混、抗压负号很烦、导出结果不够规范。
+它不是为了做一个“万能材料软件”，而是为了解决我自己在整理 ECC 数据时反复遇到的几个麻烦：曲线太多、初裂点难统一、应变单位容易混、抗压负号很烦、导出结果不够规范。
 
 [快速开始](#快速开始) · [数据格式](#数据格式) · [计算逻辑与公式](#计算逻辑与公式) · [软件架构](#软件架构) · [界面说明](#界面说明) · [用户指南](USER_GUIDE.md)
 
@@ -144,6 +144,8 @@ Smoke test passed.
 
 ## 计算逻辑与公式
 
+> 说明：README 里的公式使用 GitHub Markdown 更稳定的 `$$ ... $$` 块公式写法。少数 GitHub 客户端或镜像站如果不渲染 LaTeX，也至少能看到原始公式源码。
+
 ### 总体计算流程
 
 ```mermaid
@@ -176,31 +178,31 @@ flowchart TD
 
 当输入模式为 `Percent`：
 
-```math
-\varepsilon = \frac{\varepsilon_{input}}{100}
-```
+$$
+\varepsilon = \frac{\varepsilon_{\mathrm{input}}}{100}
+$$
 
 当输入模式为 `Decimal`：
 
-```math
-\varepsilon = \varepsilon_{input}
-```
+$$
+\varepsilon = \varepsilon_{\mathrm{input}}
+$$
 
 当输入模式为 `Auto`：
 
-```math
+$$
 \varepsilon =
 \begin{cases}
-\varepsilon_{input}/100, & \max(|\varepsilon_{input}|) > \varepsilon_{threshold} \\
-\varepsilon_{input}, & \max(|\varepsilon_{input}|) \leq \varepsilon_{threshold}
+\varepsilon_{\mathrm{input}} / 100, & \max\left(|\varepsilon_{\mathrm{input}}|\right) > \varepsilon_{\mathrm{threshold}} \\
+\varepsilon_{\mathrm{input}}, & \max\left(|\varepsilon_{\mathrm{input}}|\right) \leq \varepsilon_{\mathrm{threshold}}
 \end{cases}
-```
+$$
 
 默认情况下：
 
-```math
-\varepsilon_{threshold}=0.2
-```
+$$
+\varepsilon_{\mathrm{threshold}} = 0.2
+$$
 
 这个阈值的含义是：如果最大应变值已经大于 `0.2`，它更像是百分数数据，例如 `0.5` 表示 `0.5%`；如果最大值是 `0.005` 这类小数，则保持小数应变。
 
@@ -210,17 +212,17 @@ flowchart TD
 
 抗拉峰值点按平滑后的应力曲线识别：
 
-```math
-i_{peak}=\arg\max_i \sigma_i
-```
+$$
+i_{\mathrm{peak}} = \arg\max_i \sigma_i
+$$
 
-```math
-\sigma_u = \sigma(i_{peak})
-```
+$$
+\sigma_u = \sigma\left(i_{\mathrm{peak}}\right)
+$$
 
-```math
-\varepsilon_{peak}=100\times\varepsilon(i_{peak})
-```
+$$
+\varepsilon_{\mathrm{peak}} = 100 \times \varepsilon\left(i_{\mathrm{peak}}\right)
+$$
 
 这里 `ε_peak` 是峰值强度对应的应变，不等同于峰后极限应变。
 
@@ -230,33 +232,33 @@ i_{peak}=\arg\max_i \sigma_i
 
 有效模量使用峰值应力比例区间内的线性回归。默认区间一般为 `10%–40% σ_u`：
 
-```math
-\sigma = E_{eff}\varepsilon + b
-```
+$$
+\sigma = E_{\mathrm{eff}}\varepsilon + b
+$$
 
 拟合区间为：
 
-```math
-r_{low}\sigma_u \leq \sigma_i \leq r_{high}\sigma_u
-```
+$$
+r_{\mathrm{low}}\sigma_u \leq \sigma_i \leq r_{\mathrm{high}}\sigma_u
+$$
 
 其中：
 
-```math
-r_{low}=0.10, \quad r_{high}=0.40
-```
+$$
+r_{\mathrm{low}} = 0.10, \qquad r_{\mathrm{high}} = 0.40
+$$
 
 线性回归形式可以写成：
 
-```math
-E_{eff}=\frac{\sum(\varepsilon_i-\bar{\varepsilon})(\sigma_i-\bar{\sigma})}{\sum(\varepsilon_i-\bar{\varepsilon})^2}
-```
+$$
+E_{\mathrm{eff}} = \frac{\sum\left(\varepsilon_i - \bar{\varepsilon}\right)\left(\sigma_i - \bar{\sigma}\right)}{\sum\left(\varepsilon_i - \bar{\varepsilon}\right)^2}
+$$
 
 由于工程上常用 GPa 表示模量，程序会做单位换算：
 
-```math
-E_{eff}(GPa)=\frac{E_{eff}(MPa)}{1000}
-```
+$$
+E_{\mathrm{eff}}(\mathrm{GPa}) = \frac{E_{\mathrm{eff}}(\mathrm{MPa})}{1000}
+$$
 
 ---
 
@@ -264,13 +266,13 @@ E_{eff}(GPa)=\frac{E_{eff}(MPa)}{1000}
 
 `E_init` 用于辅助判断初裂，不建议直接把它理解为严格弹性模量。程序会从早期局部斜率中估计一个相对稳定的初始刚度水平：
 
-```math
-E_{tangent,i}=\frac{\Delta\sigma_i}{\Delta\varepsilon_i}
-```
+$$
+E_{\mathrm{tangent}, i} = \frac{\Delta \sigma_i}{\Delta \varepsilon_i}
+$$
 
-```math
-E_{init}=\operatorname{stat}\left(E_{tangent,i}\right)
-```
+$$
+E_{\mathrm{init}} = \mathrm{stat}\left(E_{\mathrm{tangent}, i}\right)
+$$
 
 这里的 `stat` 可以理解为对早期有效切线刚度的稳健统计，而不是拿第一个点附近的斜率硬算。这样做主要是为了降低起始噪声的影响。
 
@@ -282,43 +284,43 @@ E_{init}=\operatorname{stat}\left(E_{tangent,i}\right)
 
 #### 条件 A：相对线性段发生明显偏离
 
-```math
-\left|\sigma_i-\hat{\sigma}_i\right| > \max\left(\delta_{base},\delta_{ratio}\sigma_u\right)
-```
+$$
+\left|\sigma_i - \hat{\sigma}_i\right| > \max\left(\delta_{\mathrm{base}}, \delta_{\mathrm{ratio}}\sigma_u\right)
+$$
 
 其中：
 
-```math
-\hat{\sigma}_i=E_{eff}\varepsilon_i+b
-```
+$$
+\hat{\sigma}_i = E_{\mathrm{eff}}\varepsilon_i + b
+$$
 
 #### 条件 B：局部切线刚度出现下降
 
-```math
-E_{tangent,i}<\eta_E E_{init}
-```
+$$
+E_{\mathrm{tangent}, i} < \eta_E E_{\mathrm{init}}
+$$
 
 #### 条件 C：当前应力超过最低应力比例，避免把起始噪声误判成初裂
 
-```math
-\sigma_i>r_{min}\sigma_u
-```
+$$
+\sigma_i > r_{\mathrm{min}}\sigma_u
+$$
 
 满足上述条件的第一个候选点可记为：
 
-```math
-i_{cr}=\min\left\{i\mid A_i\land B_i\land C_i\right\}
-```
+$$
+i_{\mathrm{cr}} = \min \left\{ i \mid A_i \land B_i \land C_i \right\}
+$$
 
 对应初裂指标为：
 
-```math
-\sigma_{cr}=\sigma(i_{cr})
-```
+$$
+\sigma_{\mathrm{cr}} = \sigma\left(i_{\mathrm{cr}}\right)
+$$
 
-```math
-\varepsilon_{cr}=100\times\varepsilon(i_{cr})
-```
+$$
+\varepsilon_{\mathrm{cr}} = 100 \times \varepsilon\left(i_{\mathrm{cr}}\right)
+$$
 
 这部分是我觉得软件里最有意义的地方之一，因为它把“肉眼点初裂”变成了可重复的规则。
 
@@ -330,21 +332,21 @@ ECC / SHCC 的峰值点和变形终点不一定重合。程序用峰后应力下
 
 设峰后失效比例为：
 
-```math
-r_u=\text{ULTIMATE\_STRAIN\_RATIO}
-```
+$$
+r_u = \mathrm{ULTIMATE\_STRAIN\_RATIO}
+$$
 
 峰后极限点可以理解为：
 
-```math
-i_u=\min\left\{i>i_{peak}\mid \sigma_i<r_u\sigma_u \ \text{and look-ahead condition is satisfied}\right\}
-```
+$$
+i_u = \min \left\{ i > i_{\mathrm{peak}} \mid \sigma_i < r_u\sigma_u \ \mathrm{and} \ \mathrm{look\text{-}ahead\ condition\ is\ satisfied} \right\}
+$$
 
 对应极限应变：
 
-```math
-\varepsilon_u=100\times\varepsilon(i_u)
-```
+$$
+\varepsilon_u = 100 \times \varepsilon\left(i_u\right)
+$$
 
 如果曲线没有明显峰后下降，程序会尽量给出保守的曲线末端极限值。
 
@@ -354,11 +356,11 @@ i_u=\min\left\{i>i_{peak}\mid \sigma_i<r_u\sigma_u \ \text{and look-ahead condit
 
 应变硬化容量用于描述初裂之后到极限点之间的变形发展空间：
 
-```math
-\Delta\varepsilon_{sh}=\varepsilon_u-\varepsilon_{cr}
-```
+$$
+\Delta\varepsilon_{\mathrm{sh}} = \varepsilon_u - \varepsilon_{\mathrm{cr}}
+$$
 
-如果用于论文表格，我更倾向于把它写成“硬化变形容量”或“strain-hardening capacity”。
+如果用于论文表格，我更倾向于把它写成“硬化变形容量”或 `strain-hardening capacity`。
 
 ---
 
@@ -366,27 +368,30 @@ i_u=\min\left\{i>i_{peak}\mid \sigma_i<r_u\sigma_u \ \text{and look-ahead condit
 
 程序首先计算应力-应变曲线到 `ε_u` 的面积：
 
-```math
-W=\int_0^{\varepsilon_u}\sigma(\varepsilon)d\varepsilon
-```
+$$
+W = \int_0^{\varepsilon_u} \sigma(\varepsilon)\,d\varepsilon
+$$
 
 数值计算中使用 Simpson 积分近似：
 
-```math
-W\approx \operatorname{Simpson}\left(\sigma,\varepsilon\right)
-```
+$$
+W \approx \mathrm{Simpson}\left(\sigma, \varepsilon\right)
+$$
 
 结合标距 `L_0`，得到一个断裂能相关指标：
 
-```math
-G_F=L_0\int_0^{\varepsilon_u}\sigma(\varepsilon)d\varepsilon
-```
+$$
+G_F = L_0 \int_0^{\varepsilon_u} \sigma(\varepsilon)\,d\varepsilon
+$$
 
 单位关系可以理解为：
 
-```math
-MPa\cdot mm = \frac{N}{mm^2}\cdot mm = \frac{N}{mm}=kJ/m^2
-```
+$$
+\mathrm{MPa}\cdot\mathrm{mm}
+= \frac{\mathrm{N}}{\mathrm{mm}^2}\cdot\mathrm{mm}
+= \frac{\mathrm{N}}{\mathrm{mm}}
+= \mathrm{kJ}/\mathrm{m}^2
+$$
 
 这里的 `G_F` 更适合作为同一套试验流程下的对比指标，而不是不加条件地等同于所有断裂力学语境下的材料常数。
 
@@ -396,15 +401,15 @@ MPa\cdot mm = \frac{N}{mm^2}\cdot mm = \frac{N}{mm}=kJ/m^2
 
 为表征多缝开展阶段的应力平台波动，程序计算平台区应力的变异系数：
 
-```math
-CV_{\sigma}=\frac{s_{\sigma}}{\bar{\sigma}}
-```
+$$
+CV_{\sigma} = \frac{s_{\sigma}}{\bar{\sigma}}
+$$
 
 其中：
 
-```math
-s_{\sigma}=\sqrt{\frac{1}{n-1}\sum_{i=1}^{n}(\sigma_i-\bar{\sigma})^2}
-```
+$$
+s_{\sigma} = \sqrt{\frac{1}{n-1}\sum_{i=1}^{n}\left(\sigma_i - \bar{\sigma}\right)^2}
+$$
 
 `CV_σ` 越小，说明平台区应力波动越小；但它对噪声、平滑窗口和平台区定义都比较敏感，所以更适合作为辅助指标。
 
@@ -414,29 +419,29 @@ s_{\sigma}=\sqrt{\frac{1}{n-1}\sum_{i=1}^{n}(\sigma_i-\bar{\sigma})^2}
 
 抗压模式下，如果原始应力为负值，程序默认转为强度大小：
 
-```math
-\sigma_{c,i}=|\sigma_i|
-```
+$$
+\sigma_{c,i} = \left|\sigma_i\right|
+$$
 
 单个试件峰值抗压强度为：
 
-```math
-f_c=\max_i \sigma_{c,i}
-```
+$$
+f_c = \max_i \sigma_{c,i}
+$$
 
 同组样品统计：
 
-```math
-\bar{f_c}=\frac{1}{n}\sum_{i=1}^{n}f_{c,i}
-```
+$$
+\bar{f}_c = \frac{1}{n}\sum_{i=1}^{n} f_{c,i}
+$$
 
-```math
-SD=\sqrt{\frac{1}{n-1}\sum_{i=1}^{n}(f_{c,i}-\bar{f_c})^2}
-```
+$$
+SD = \sqrt{\frac{1}{n-1}\sum_{i=1}^{n}\left(f_{c,i} - \bar{f}_c\right)^2}
+$$
 
-```math
-COV=\frac{SD}{\bar{f_c}}\times100\%
-```
+$$
+COV = \frac{SD}{\bar{f}_c}\times 100\%
+$$
 
 ---
 
