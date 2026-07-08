@@ -1,13 +1,16 @@
 import numpy as np
 import matplotlib
+
+matplotlib.use('QtAgg')
+
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as path_effects
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from matplotlib.ticker import ScalarFormatter, AutoMinorLocator, FixedLocator
 from itertools import cycle
-from typing import List, Dict, Optional, Any
-from PySide6.QtWidgets import QInputDialog
+from typing import List, Dict
+
 from app.core.physics import MaterialConstants
 
 try:
@@ -16,7 +19,6 @@ try:
 except ImportError:
     HAS_MPLCURSORS = False
 
-matplotlib.use('QtAgg')
 
 SCI_COLORS = ['#0072B2', '#D55E00', '#009E73', '#CC79A7', '#F0E442', '#56B4E9', '#E69F00', '#333333']
 
@@ -49,7 +51,7 @@ class MplCanvas(FigureCanvasQTAgg):
     def _setup_global_style(self):
         plt.rcParams.update({
             'font.family': 'sans-serif',
-            'font.sans-serif': ['Microsoft YaHei', 'SimHei', 'Arial', 'Helvetica', 'DejaVu Sans'],
+            'font.sans-serif': ['Microsoft YaHei', 'SimHei', 'Arial Unicode MS', 'Arial', 'Helvetica', 'DejaVu Sans'],
             'mathtext.fontset': 'stixsans',
             'axes.unicode_minus': False,
             'axes.linewidth': 1.2,
@@ -62,14 +64,14 @@ class MplCanvas(FigureCanvasQTAgg):
             'xtick.labelsize': 10,
             'ytick.labelsize': 10,
             'legend.fontsize': 9,
-            'figure.dpi': 120
+            'figure.dpi': 120,
         })
 
     def clear_plot(self):
         if self.cursors:
-            for c in self.cursors:
+            for cursor in self.cursors:
                 try:
-                    c.remove()
+                    cursor.remove()
                 except Exception:
                     pass
         self.cursors.clear()
@@ -104,6 +106,7 @@ class MplCanvas(FigureCanvasQTAgg):
             "Plateau Stability (CV)": r"$CV_{\sigma}$",
             "First Crack Strength (MPa)": r"$\sigma_{cr}$ (MPa)",
             "Ultimate Stress (MPa)": r"$\sigma_{u}$ (MPa)",
+            "Compressive Strength, σ (MPa)": r"抗压强度, $\sigma$ (MPa)",
         }
         return mapping.get(raw_label, raw_label)
 
@@ -118,10 +121,19 @@ class MplCanvas(FigureCanvasQTAgg):
         bar_width = 0.6
         color_cycle = cycle(SCI_COLORS)
 
-        bars = ax.bar(x, means, yerr=stds, width=bar_width,
-                      color=[next(color_cycle) for _ in range(len(names))],
-                      alpha=0.9, edgecolor='black', linewidth=1.2,
-                      capsize=5, error_kw={'elinewidth': 1.5, 'ecolor': '#333'}, zorder=3)
+        bars = ax.bar(
+            x,
+            means,
+            yerr=stds,
+            width=bar_width,
+            color=[next(color_cycle) for _ in range(len(names))],
+            alpha=0.9,
+            edgecolor='black',
+            linewidth=1.2,
+            capsize=5,
+            error_kw={'elinewidth': 1.5, 'ecolor': '#333'},
+            zorder=3,
+        )
 
         if len(names) > 1:
             hatch_patterns = ['//', '..', '\\', 'xx', '--']
@@ -134,7 +146,7 @@ class MplCanvas(FigureCanvasQTAgg):
         ax.xaxis.set_major_locator(FixedLocator(x))
         ax.set_xticklabels(names, fontweight='bold', fontsize=11, rotation=30 if len(names) > 5 else 0)
         ax.set_ylabel(self._format_latex_label(ylabel), fontweight='bold', fontsize=12)
-        ax.set_title("Compressive Strength Comparison", fontsize=14, fontweight='bold', pad=15)
+        ax.set_title("抗压强度对比", fontsize=14, fontweight='bold', pad=15)
         self._apply_scientific_axis_style(ax, is_categorical=True)
         ax.set_ylim(bottom=0)
         self.draw()
@@ -151,18 +163,29 @@ class MplCanvas(FigureCanvasQTAgg):
         bar_width = 0.8 / n_groups
         color_cycle = cycle(SCI_COLORS)
 
-        for i, gname in enumerate(group_names):
-            if gname not in metrics_data:
+        for i, group_name in enumerate(group_names):
+            if group_name not in metrics_data:
                 continue
-            stats = metrics_data[gname]
+            stats = metrics_data[group_name]
             means = stats.get('means', [])
             stds = stats.get('stds', [])
             offset = (i - (n_groups - 1) / 2) * bar_width
             bar_color = next(color_cycle)
 
-            bars = ax.bar(x + offset, means, yerr=stds, width=bar_width, label=gname,
-                          color=bar_color, alpha=0.9, edgecolor='black', linewidth=1.0,
-                          capsize=4, error_kw={'elinewidth': 1.2, 'ecolor': '#333'}, zorder=3)
+            bars = ax.bar(
+                x + offset,
+                means,
+                yerr=stds,
+                width=bar_width,
+                label=group_name,
+                color=bar_color,
+                alpha=0.9,
+                edgecolor='black',
+                linewidth=1.0,
+                capsize=4,
+                error_kw={'elinewidth': 1.2, 'ecolor': '#333'},
+                zorder=3,
+            )
 
             if n_groups > 1:
                 hatch_patterns = ['//', '..', '\\', 'xx']
@@ -171,13 +194,13 @@ class MplCanvas(FigureCanvasQTAgg):
                     bar.set_linewidth(0)
 
             if n_groups <= 3:
-                ax.bar_label(bars, fmt='%.1f', padding=3, fontsize=9, fontweight='bold', color=bar_color)
+                ax.bar_label(bars, fmt='%.2g', padding=3, fontsize=9, fontweight='bold', color=bar_color)
 
         ax.xaxis.set_major_locator(FixedLocator(x))
-        latex_labels = [self._format_latex_label(lbl) for lbl in param_labels]
+        latex_labels = [self._format_latex_label(label) for label in param_labels]
         ax.set_xticklabels(latex_labels, fontweight='bold', fontsize=11, rotation=12, ha='right')
-        ax.set_ylabel("Metric Value", fontsize=11, fontweight='bold')
-        ax.set_title("Statistical Comparison", fontsize=13, fontweight='bold', pad=12)
+        ax.set_ylabel("指标数值", fontsize=11, fontweight='bold')
+        ax.set_title("分组统计对比", fontsize=13, fontweight='bold', pad=12)
         self._apply_scientific_axis_style(ax, is_categorical=True)
         self._setup_legend(ax)
         ax.set_ylim(bottom=0)
@@ -189,6 +212,9 @@ class MplCanvas(FigureCanvasQTAgg):
         if results_dict is None:
             results_dict = {}
         ax = self.axes
+
+        strain = np.asarray(strain, dtype=float)
+        stress = np.asarray(stress, dtype=float)
         if len(strain) == 0:
             return
 
@@ -208,8 +234,10 @@ class MplCanvas(FigureCanvasQTAgg):
                 self._draw_advanced_visuals(ax, x_pct, stress, results_dict, visible=show_annotations)
 
         is_compressive = results_dict.get("Type") == "Compressive"
-        xlabel = r"Compressive Strain, $\varepsilon$ (%)" if is_compressive else r"Tensile Strain, $\varepsilon$ (%)"
-        ylabel = r"Compressive Stress, $\sigma$ (MPa)" if is_compressive else r"Tensile Stress, $\sigma$ (MPa)"
+        xlabel = r"抗压应变, $\varepsilon$ (%)" if is_compressive else r"拉伸应变, $\varepsilon$ (%)"
+        ylabel = r"抗压应力, $\sigma$ (MPa)" if is_compressive else r"拉伸应力, $\sigma$ (MPa)"
+        title_prefix = "抗压曲线" if is_compressive else "拉伸曲线"
+        ax.set_title(f"{title_prefix}：{sample_name}", fontweight='bold', fontsize=12, pad=10)
         self._setup_axes_limits(ax, x_pct, stress)
         ax.set_xlabel(xlabel, fontweight='bold', fontsize=11)
         ax.set_ylabel(ylabel, fontweight='bold', fontsize=11)
@@ -233,32 +261,49 @@ class MplCanvas(FigureCanvasQTAgg):
         stroke = [path_effects.withStroke(linewidth=current_lw + 1.5, foreground="white", alpha=0.7)]
 
         for data in data_list:
-            x = data.get("raw_strain", []) * 100
-            y = data.get("raw_stress", [])
-            if len(x) == 0:
+            x = np.asarray(data.get("raw_strain", []), dtype=float) * 100
+            y = np.asarray(data.get("raw_stress", []), dtype=float)
+            if len(x) == 0 or len(y) == 0:
                 continue
             all_x.append(x)
             all_y.append(y)
             color = next(color_cycle)
             if len(x) > 3:
-                line, = ax.plot(x, y, color=color, lw=current_lw, alpha=0.85, label=data['Sample ID'], zorder=3,
-                                rasterized=True)
+                line, = ax.plot(
+                    x,
+                    y,
+                    color=color,
+                    lw=current_lw,
+                    alpha=0.85,
+                    label=data.get('Sample ID', 'Unknown'),
+                    zorder=3,
+                    rasterized=True,
+                )
                 line.set_path_effects(stroke)
                 lines.append(line)
             else:
-                ax.scatter(x, y, color=color, s=60, marker='o', edgecolors='white', label=data['Sample ID'], zorder=3)
+                ax.scatter(
+                    x,
+                    y,
+                    color=color,
+                    s=60,
+                    marker='o',
+                    edgecolors='white',
+                    label=data.get('Sample ID', 'Unknown'),
+                    zorder=3,
+                )
 
         if lines:
             self._add_hover_cursor(lines)
-        ax.set_title(f"Comparison Overlay ({n} Samples)", fontweight='bold', fontsize=12)
+        ax.set_title(f"曲线对比（{n} 个样品）", fontweight='bold', fontsize=12, pad=10)
         if all_x:
             self._setup_axes_limits(ax, np.concatenate(all_x), np.concatenate(all_y))
 
         first_type = str(data_list[0].get("Type", ""))
         is_compressive = "Compressive" in first_type
-        ax.set_xlabel(r"Compressive Strain, $\varepsilon$ (%)" if is_compressive else r"Tensile Strain, $\varepsilon$ (%)",
+        ax.set_xlabel(r"抗压应变, $\varepsilon$ (%)" if is_compressive else r"拉伸应变, $\varepsilon$ (%)",
                       fontweight='bold', fontsize=11)
-        ax.set_ylabel(r"Compressive Stress, $\sigma$ (MPa)" if is_compressive else r"Tensile Stress, $\sigma$ (MPa)",
+        ax.set_ylabel(r"抗压应力, $\sigma$ (MPa)" if is_compressive else r"拉伸应力, $\sigma$ (MPa)",
                       fontweight='bold', fontsize=11)
         self._apply_scientific_axis_style(ax, is_categorical=False)
         if n <= 12:
@@ -281,12 +326,25 @@ class MplCanvas(FigureCanvasQTAgg):
         ax.spines['right'].set_visible(False)
 
     def _setup_legend(self, ax, fontsize=9):
-        leg = ax.legend(loc='best', frameon=True, fontsize=fontsize,
-                        fancybox=True, edgecolor='#bdc3c7', facecolor='#f8f9fa',
-                        framealpha=0.85, borderpad=0.8, labelspacing=0.5)
-        leg.set_draggable(True)
+        handles, labels = ax.get_legend_handles_labels()
+        if not handles:
+            return
+        legend = ax.legend(
+            loc='best',
+            frameon=True,
+            fontsize=fontsize,
+            fancybox=True,
+            edgecolor='#bdc3c7',
+            facecolor='#f8f9fa',
+            framealpha=0.88,
+            borderpad=0.8,
+            labelspacing=0.5,
+        )
+        legend.set_draggable(True)
 
     def _setup_axes_limits(self, ax, x_data, y_data):
+        x_data = np.asarray(x_data, dtype=float)
+        y_data = np.asarray(y_data, dtype=float)
         x_clean = x_data[np.isfinite(x_data)]
         y_clean = y_data[np.isfinite(y_data)]
         x_max = np.max(x_clean) if len(x_clean) > 0 else 0
@@ -299,14 +357,23 @@ class MplCanvas(FigureCanvasQTAgg):
         ax.set_ylim(bottom=-y_max * 0.02, top=y_max * 1.15)
 
     def _draw_fit_line(self, ax, x_pct, results_dict, visible=True):
-        E_eff = results_dict.get("E_eff (GPa)", results_dict.get("Effective Modulus (GPa)", 0))
+        e_eff = results_dict.get("E_eff (GPa)", results_dict.get("Effective Modulus (GPa)", 0))
         intercept = results_dict.get("_E_intercept", 0)
         idx_cr = results_dict.get("_idx_cr", 0)
-        if E_eff > 0.1 and idx_cr is not None and idx_cr < len(x_pct):
+        if e_eff > 0.1 and idx_cr is not None and idx_cr < len(x_pct):
             x_fit = np.linspace(0, x_pct[idx_cr] * 1.2, 50)
-            y_fit = (E_eff * 10.0) * x_fit + intercept
-            line, = ax.plot(x_fit, y_fit, linestyle=(0, (5, 5)), color='#e74c3c', linewidth=1.5,
-                            label=r'$E_{eff}$ Fit', alpha=0.8, zorder=2, visible=visible)
+            y_fit = (e_eff * 10.0) * x_fit + intercept
+            line, = ax.plot(
+                x_fit,
+                y_fit,
+                linestyle=(0, (5, 5)),
+                color='#e74c3c',
+                linewidth=1.5,
+                label=r'$E_{eff}$ 拟合',
+                alpha=0.8,
+                zorder=2,
+                visible=visible,
+            )
             self.fit_lines.append(line)
 
     def _draw_advanced_visuals(self, ax, x_pct, stress, results_dict, visible=True):
@@ -315,18 +382,41 @@ class MplCanvas(FigureCanvasQTAgg):
         if idx_u is None or idx_u >= len(x_pct):
             return
 
-        poly = ax.fill_between(x_pct[:idx_u + 1], 0, stress[:idx_u + 1], color='#3498db', alpha=0.15,
-                               label='Energy Vis', zorder=1, rasterized=True)
+        poly = ax.fill_between(
+            x_pct[:idx_u + 1],
+            0,
+            stress[:idx_u + 1],
+            color='#3498db',
+            alpha=0.15,
+            label='能量积分区',
+            zorder=1,
+            rasterized=True,
+        )
         poly.set_visible(visible)
         self.advanced_artists.append(poly)
 
         if idx_cr is not None and idx_cr < idx_u:
             x_s, x_e = x_pct[idx_cr], x_pct[idx_u]
             y_pos = np.max(stress[:idx_u + 1]) * 0.6
-            anno = ax.annotate('', xy=(x_s, y_pos), xytext=(x_e, y_pos),
-                               arrowprops=dict(arrowstyle='<->', color='#9b59b6', lw=1.8), zorder=5, visible=visible)
-            txt = ax.text((x_s + x_e) / 2, y_pos * 1.08, r'$\Delta\varepsilon_{sh}$', color='#8e44ad',
-                          ha='center', va='bottom', fontsize=12, fontweight='bold', visible=visible)
+            anno = ax.annotate(
+                '',
+                xy=(x_s, y_pos),
+                xytext=(x_e, y_pos),
+                arrowprops=dict(arrowstyle='<->', color='#9b59b6', lw=1.8),
+                zorder=5,
+                visible=visible,
+            )
+            txt = ax.text(
+                (x_s + x_e) / 2,
+                y_pos * 1.08,
+                r'$\Delta\varepsilon_{sh}$',
+                color='#8e44ad',
+                ha='center',
+                va='bottom',
+                fontsize=12,
+                fontweight='bold',
+                visible=visible,
+            )
             self.advanced_artists.append(anno)
             self.advanced_artists.append(txt)
 
@@ -343,37 +433,57 @@ class MplCanvas(FigureCanvasQTAgg):
         cap = results_dict.get('Hardening Capacity (%)', 0)
 
         if view_mode.lower() == "advanced":
-            txt = (f"$\\bf{{Analysis\\ Parameters}}$\n"
+            txt = (f"$\\bf{{高级指标}}$\n"
                    f"$E_{{init}}$: {e_init:.2f} GPa\n"
                    f"$G_F$: {g_f:.1f} kJ/m$^2$\n"
                    f"$\\Delta\\varepsilon_{{sh}}$: {cap:.2f} %\n"
                    f"$CV_{{\\sigma}}$: {cv_str}")
         else:
-            txt = (f"$\\bf{{Key\\ Properties}}$\n"
+            txt = (f"$\\bf{{关键指标}}$\n"
                    f"$E_{{eff}}$: {e_eff:.2f} GPa\n"
                    f"$\\sigma_{{cr}}$: {sig_cr:.2f} MPa\n"
                    f"$\\sigma_{{u}}$: {sig_u:.2f} MPa\n"
                    f"$\\varepsilon_{{peak}}$: {eps_peak:.2f} %\n"
                    f"$\\varepsilon_{{u}}$: {eps_u:.2f} %")
 
-        self.draggable_text = ax.text(0.60, 0.15, txt, transform=ax.transAxes, fontsize=10,
-                                      va='bottom', ha='left', linespacing=1.6,
-                                      bbox=dict(boxstyle='round,pad=0.6', facecolor='#f8f9fa', alpha=0.85,
-                                                edgecolor='#bdc3c7', linewidth=1.0),
-                                      picker=True, visible=visible, zorder=5)
+        self.draggable_text = ax.text(
+            0.60,
+            0.15,
+            txt,
+            transform=ax.transAxes,
+            fontsize=10,
+            va='bottom',
+            ha='left',
+            linespacing=1.6,
+            bbox=dict(boxstyle='round,pad=0.6', facecolor='#f8f9fa', alpha=0.88,
+                      edgecolor='#bdc3c7', linewidth=1.0),
+            picker=True,
+            visible=visible,
+            zorder=5,
+        )
 
         key_points = [
-            ("_idx_peak", r'Peak ($\sigma_u$, $\varepsilon_{peak}$)', '*', '#27ae60', 14),
-            ("_idx_cr", r'LOP ($\sigma_{cr}$)', 'o', '#e67e22', 8),
-            ("_idx_u", r'Limit ($\varepsilon_u$)', 'X', '#c0392b', 10),
+            ("_idx_peak", r'峰值 ($\sigma_u$, $\varepsilon_{peak}$)', '*', '#27ae60', 14),
+            ("_idx_cr", r'初裂 LOP ($\sigma_{cr}$)', 'o', '#e67e22', 8),
+            ("_idx_u", r'极限点 ($\varepsilon_u$)', 'X', '#c0392b', 10),
         ]
         for key, label, marker, color, size in key_points:
             idx = results_dict.get(key)
             if idx is not None and idx < len(x_pct):
                 self.current_markers.append(
-                    ax.plot(x_pct[idx], stress[idx], marker, color=color, markersize=size,
-                            markeredgecolor='white', markeredgewidth=1.0, label=label,
-                            zorder=4, visible=visible)[0])
+                    ax.plot(
+                        x_pct[idx],
+                        stress[idx],
+                        marker,
+                        color=color,
+                        markersize=size,
+                        markeredgecolor='white',
+                        markeredgewidth=1.0,
+                        label=label,
+                        zorder=4,
+                        visible=visible,
+                    )[0]
+                )
 
     def _add_hover_cursor(self, artists):
         if not artists or not HAS_MPLCURSORS:
@@ -385,7 +495,7 @@ class MplCanvas(FigureCanvasQTAgg):
             def on_add(sel):
                 x, y = sel.target
                 label = sel.artist.get_label()
-                sel.annotation.set_text(f"{label}\nε={x:.3f}%\nσ={y:.2f}")
+                sel.annotation.set_text(f"{label}\nε={x:.3f}%\nσ={y:.2f} MPa")
                 sel.annotation.get_bbox_patch().set(fc="white", alpha=0.9, ec="#ccc")
                 sel.annotation.arrow_patch.set(arrowstyle="-", fc="white", alpha=0.5)
 
@@ -406,9 +516,9 @@ class MplCanvas(FigureCanvasQTAgg):
             self.is_dragging = True
             self.drag_start_pos = (event.x, event.y)
             self.press_pos = (event.x, event.y)
-            for c in self.cursors:
-                if hasattr(c, 'bg'):
-                    c.bg.set_visible(False)
+            for cursor in self.cursors:
+                if hasattr(cursor, 'bg'):
+                    cursor.bg.set_visible(False)
 
     def on_motion(self, event):
         if not self.is_dragging or not event.inaxes:
@@ -416,24 +526,18 @@ class MplCanvas(FigureCanvasQTAgg):
         dx = event.x - self.drag_start_pos[0]
         dy = event.y - self.drag_start_pos[1]
         bbox = self.axes.bbox
-        self.draggable_text.set_position((self.draggable_text.get_position()[0] + dx / bbox.width,
-                                          self.draggable_text.get_position()[1] + dy / bbox.height))
+        self.draggable_text.set_position((
+            self.draggable_text.get_position()[0] + dx / bbox.width,
+            self.draggable_text.get_position()[1] + dy / bbox.height,
+        ))
         self.drag_start_pos = (event.x, event.y)
         self.draw_idle()
 
     def on_release(self, event):
         self.is_dragging = False
-        for c in self.cursors:
-            if hasattr(c, 'bg'):
-                c.bg.set_visible(True)
+        for cursor in self.cursors:
+            if hasattr(cursor, 'bg'):
+                cursor.bg.set_visible(True)
 
     def on_pick(self, event):
-        if event.mouseevent.button != 1 or self._is_zoom_mode():
-            return
-        if event.artist == self.draggable_text and self.press_pos and np.hypot(
-                event.mouseevent.x - self.press_pos[0],
-                event.mouseevent.y - self.press_pos[1]) < 3:
-            txt, ok = QInputDialog.getMultiLineText(self, "Edit Annotation", "Text:", self.draggable_text.get_text())
-            if ok:
-                self.draggable_text.set_text(txt)
-                self.draw()
+        pass
