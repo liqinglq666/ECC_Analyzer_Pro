@@ -11,7 +11,7 @@
 
 它不是为了做一个“万能材料软件”，而是为了解决我自己在整理 ECC 试验数据时反复遇到的几个麻烦：曲线太多、初裂点难统一、应变单位容易混、抗压负号很烦、导出结果不够规范。
 
-[快速开始](#快速开始) · [数据格式](#数据格式) · [计算逻辑](#计算逻辑) · [界面说明](#界面说明) · [用户指南](USER_GUIDE.md)
+[快速开始](#快速开始) · [数据格式](#数据格式) · [计算逻辑与公式](#计算逻辑与公式) · [软件架构](#软件架构) · [界面说明](#界面说明) · [用户指南](USER_GUIDE.md)
 
 </div>
 
@@ -38,7 +38,7 @@
 python -m pip install -r requirements.txt
 ```
 
-如果你使用 conda 环境，例如我的习惯是：
+如果使用 conda 环境，例如我的本地环境是：
 
 ```bash
 conda activate ecc_sim
@@ -57,7 +57,7 @@ python main.py
 main.py → app/ui/main_window_active.py
 ```
 
-`app/ui/main_window.py` 保留为基础窗口实现，当前真正对用户生效的 UI 行为集中在 `main_window_active.py` 中维护。这样后续修改 UI 时，不会再出现“patch 文件才是真入口”的混乱情况。
+`app/ui/main_window.py` 保留为基础窗口实现，当前真正对用户生效的 UI 行为集中在 `main_window_active.py` 中维护。这样后续修改 UI 时，不会再出现“改了一个文件，运行时却没变化”的问题。
 
 ### 3. 运行核心测试
 
@@ -106,7 +106,7 @@ Smoke test passed.
 
 ### 抗压数据：汇总强度表
 
-如果你已经有每个试件的峰值抗压强度，可以用这种格式：
+如果已经有每个试件的峰值抗压强度，可以用这种格式：
 
 | Group | Test 1 | Test 2 | Test 3 |
 |---|---:|---:|---:|
@@ -125,7 +125,7 @@ Smoke test passed.
 
 这是本软件目前最重要的设置之一。
 
-在 **Settings → Input Strain Unit** 中有三种模式：
+在 **参数设置 → 输入应变单位** 中有三种模式：
 
 | 模式 | 适用情况 | 示例 |
 |---|---|---|
@@ -138,67 +138,486 @@ Smoke test passed.
 - `0.5` 会被判断为百分数，应变内部转为 `0.005`；
 - `0.005` 会被保留为小数应变。
 
-但我个人更建议：如果你的表头明确写了 `%`，直接选 **Percent**，不要完全依赖 Auto。
+我个人更建议：如果你的表头明确写了 `%`，直接选 **Percent**，不要完全依赖 Auto。
 
 ---
 
-## 计算逻辑
+## 计算逻辑与公式
+
+### 总体计算流程
 
 ```mermaid
-graph TD
-    A[原始应变-应力数据] --> B[应变单位归一化]
-    B --> C[数据清洗与排序]
-    C --> D[Savitzky-Golay 平滑]
-    D --> E[峰值强度 σ_u 与峰值应变 ε_peak]
-    E --> F[10%-40% 峰值应力区间回归 E_eff]
-    E --> G[早期切线模量估计 E_init]
-    F --> H[双判据初裂识别]
-    G --> H
-    H --> I[初裂强度 σ_cr 与初裂应变 ε_cr]
-    E --> J[峰后 look-ahead 极限点追踪]
-    J --> K[极限应变 ε_u]
-    I --> L[硬化容量 Δε_sh = ε_u - ε_cr]
-    K --> M[积分能量与 G_F]
+flowchart TD
+    A["原始 Excel / CSV"] --> B["DataLoader 智能读取"]
+    B --> C{数据类型}
+    C -->|"抗拉 Tensile"| D["应变单位归一化"]
+    C -->|"抗压 Compressive"| E["抗压应力取绝对值"]
+    D --> F["数据清洗 / 排序 / 去除 NaN"]
+    F --> G["Savitzky-Golay 平滑"]
+    G --> H["峰值点识别 σ_u / ε_peak"]
+    H --> I["有效模量 E_eff 回归"]
+    H --> J["初始切线模量 E_init 估计"]
+    I --> K["初裂点 σ_cr / ε_cr 识别"]
+    J --> K
+    H --> L["峰后极限点 ε_u 追踪"]
+    K --> M["硬化容量 Δε_sh"]
+    L --> N["能量积分 G_F"]
+    M --> O["表格 / 图表 / Excel 报告"]
+    N --> O
+    E --> P["峰值抗压强度统计"]
+    P --> O
 ```
 
-### 1. 有效模量 `E_eff`
+---
 
-默认在峰值应力的 10%–40% 区间做线性回归，用来表征工程意义上的有效刚度。
+### 1. 应变单位归一化
 
-### 2. 初始模量 `E_init`
+程序内部统一使用小数应变参与计算，例如 `0.005` 表示 `0.5%`。显示和导出时再转为百分数。
 
-对早期切线模量进行统计提取，主要用于辅助判断初裂，而不是简单取第一个点附近的斜率。
+当输入模式为 `Percent`：
 
-### 3. 初裂强度 `σ_cr`
-
-初裂不是单一阈值判断，而是同时满足：
-
-```text
-线性偏离 > max(CRACK_TOLERANCE_BASE, CRACK_TOLERANCE_RATIO × σ_u)
-切线刚度 < CRACK_STIFFNESS_CONSTRAINT × E_init
-当前应力 > CRACK_MIN_STRESS_RATIO × σ_u
+```math
+\varepsilon = \frac{\varepsilon_{input}}{100}
 ```
 
-这个设计是为了减少噪声点导致的误判。
+当输入模式为 `Decimal`：
 
-### 4. `ε_peak` 与 `ε_u`
+```math
+\varepsilon = \varepsilon_{input}
+```
 
-这两个量必须分开：
+当输入模式为 `Auto`：
 
-- `ε_peak`：峰值应力 `σ_u` 对应的应变；
-- `ε_u`：峰后应力持续跌落到设定比例后的极限/失效应变。
+```math
+\varepsilon =
+\begin{cases}
+\varepsilon_{input}/100, & \max(|\varepsilon_{input}|) > \varepsilon_{threshold} \\
+\varepsilon_{input}, & \max(|\varepsilon_{input}|) \leq \varepsilon_{threshold}
+\end{cases}
+```
 
-ECC 有明显的多缝开展和纤维桥接过程，峰值点不一定等于真正的极限变形点。
+默认情况下：
 
-### 5. 能量指标
+```math
+\varepsilon_{threshold}=0.2
+```
 
-软件会对 `0 → ε_u` 的应力-应变曲线做 Simpson 积分，并结合标距 `L0` 给出一个断裂能相关指标：
+这个阈值的含义是：如果最大应变值已经大于 `0.2`，它更像是百分数数据，例如 `0.5` 表示 `0.5%`；如果最大值是 `0.005` 这类小数，则保持小数应变。
 
-```text
-G_F = L0 × ∫σ(ε)dε
+---
+
+### 2. 峰值强度与峰值应变
+
+抗拉峰值点按平滑后的应力曲线识别：
+
+```math
+i_{peak}=\arg\max_i \sigma_i
+```
+
+```math
+\sigma_u = \sigma(i_{peak})
+```
+
+```math
+\varepsilon_{peak}=100\times\varepsilon(i_{peak})
+```
+
+这里 `ε_peak` 是峰值强度对应的应变，不等同于峰后极限应变。
+
+---
+
+### 3. 有效模量 `E_eff`
+
+有效模量使用峰值应力比例区间内的线性回归。默认区间一般为 `10%–40% σ_u`：
+
+```math
+\sigma = E_{eff}\varepsilon + b
+```
+
+拟合区间为：
+
+```math
+r_{low}\sigma_u \leq \sigma_i \leq r_{high}\sigma_u
+```
+
+其中：
+
+```math
+r_{low}=0.10, \quad r_{high}=0.40
+```
+
+线性回归形式可以写成：
+
+```math
+E_{eff}=\frac{\sum(\varepsilon_i-\bar{\varepsilon})(\sigma_i-\bar{\sigma})}{\sum(\varepsilon_i-\bar{\varepsilon})^2}
+```
+
+由于工程上常用 GPa 表示模量，程序会做单位换算：
+
+```math
+E_{eff}(GPa)=\frac{E_{eff}(MPa)}{1000}
+```
+
+---
+
+### 4. 初始切线模量 `E_init`
+
+`E_init` 用于辅助判断初裂，不建议直接把它理解为严格弹性模量。程序会从早期局部斜率中估计一个相对稳定的初始刚度水平：
+
+```math
+E_{tangent,i}=\frac{\Delta\sigma_i}{\Delta\varepsilon_i}
+```
+
+```math
+E_{init}=\operatorname{stat}\left(E_{tangent,i}\right)
+```
+
+这里的 `stat` 可以理解为对早期有效切线刚度的稳健统计，而不是拿第一个点附近的斜率硬算。这样做主要是为了降低起始噪声的影响。
+
+---
+
+### 5. 初裂强度 `σ_cr`
+
+初裂点不是单一阈值判断，而是同时满足三类条件。
+
+#### 条件 A：相对线性段发生明显偏离
+
+```math
+\left|\sigma_i-\hat{\sigma}_i\right| > \max\left(\delta_{base},\delta_{ratio}\sigma_u\right)
+```
+
+其中：
+
+```math
+\hat{\sigma}_i=E_{eff}\varepsilon_i+b
+```
+
+#### 条件 B：局部切线刚度出现下降
+
+```math
+E_{tangent,i}<\eta_E E_{init}
+```
+
+#### 条件 C：当前应力超过最低应力比例，避免把起始噪声误判成初裂
+
+```math
+\sigma_i>r_{min}\sigma_u
+```
+
+满足上述条件的第一个候选点可记为：
+
+```math
+i_{cr}=\min\left\{i\mid A_i\land B_i\land C_i\right\}
+```
+
+对应初裂指标为：
+
+```math
+\sigma_{cr}=\sigma(i_{cr})
+```
+
+```math
+\varepsilon_{cr}=100\times\varepsilon(i_{cr})
+```
+
+这部分是我觉得软件里最有意义的地方之一，因为它把“肉眼点初裂”变成了可重复的规则。
+
+---
+
+### 6. 峰后极限应变 `ε_u`
+
+ECC / SHCC 的峰值点和变形终点不一定重合。程序用峰后应力下降比例来寻找极限应变。
+
+设峰后失效比例为：
+
+```math
+r_u=\text{ULTIMATE\_STRAIN\_RATIO}
+```
+
+峰后极限点可以理解为：
+
+```math
+i_u=\min\left\{i>i_{peak}\mid \sigma_i<r_u\sigma_u \ \text{and look-ahead condition is satisfied}\right\}
+```
+
+对应极限应变：
+
+```math
+\varepsilon_u=100\times\varepsilon(i_u)
+```
+
+如果曲线没有明显峰后下降，程序会尽量给出保守的曲线末端极限值。
+
+---
+
+### 7. 应变硬化容量 `Δε_sh`
+
+应变硬化容量用于描述初裂之后到极限点之间的变形发展空间：
+
+```math
+\Delta\varepsilon_{sh}=\varepsilon_u-\varepsilon_{cr}
+```
+
+如果用于论文表格，我更倾向于把它写成“硬化变形容量”或“strain-hardening capacity”。
+
+---
+
+### 8. 能量指标与断裂能相关量 `G_F`
+
+程序首先计算应力-应变曲线到 `ε_u` 的面积：
+
+```math
+W=\int_0^{\varepsilon_u}\sigma(\varepsilon)d\varepsilon
+```
+
+数值计算中使用 Simpson 积分近似：
+
+```math
+W\approx \operatorname{Simpson}\left(\sigma,\varepsilon\right)
+```
+
+结合标距 `L_0`，得到一个断裂能相关指标：
+
+```math
+G_F=L_0\int_0^{\varepsilon_u}\sigma(\varepsilon)d\varepsilon
+```
+
+单位关系可以理解为：
+
+```math
+MPa\cdot mm = \frac{N}{mm^2}\cdot mm = \frac{N}{mm}=kJ/m^2
 ```
 
 这里的 `G_F` 更适合作为同一套试验流程下的对比指标，而不是不加条件地等同于所有断裂力学语境下的材料常数。
+
+---
+
+### 9. 平台稳定性 `CV_σ`
+
+为表征多缝开展阶段的应力平台波动，程序计算平台区应力的变异系数：
+
+```math
+CV_{\sigma}=\frac{s_{\sigma}}{\bar{\sigma}}
+```
+
+其中：
+
+```math
+s_{\sigma}=\sqrt{\frac{1}{n-1}\sum_{i=1}^{n}(\sigma_i-\bar{\sigma})^2}
+```
+
+`CV_σ` 越小，说明平台区应力波动越小；但它对噪声、平滑窗口和平台区定义都比较敏感，所以更适合作为辅助指标。
+
+---
+
+### 10. 抗压强度统计
+
+抗压模式下，如果原始应力为负值，程序默认转为强度大小：
+
+```math
+\sigma_{c,i}=|\sigma_i|
+```
+
+单个试件峰值抗压强度为：
+
+```math
+f_c=\max_i \sigma_{c,i}
+```
+
+同组样品统计：
+
+```math
+\bar{f_c}=\frac{1}{n}\sum_{i=1}^{n}f_{c,i}
+```
+
+```math
+SD=\sqrt{\frac{1}{n-1}\sum_{i=1}^{n}(f_{c,i}-\bar{f_c})^2}
+```
+
+```math
+COV=\frac{SD}{\bar{f_c}}\times100\%
+```
+
+---
+
+## 算法伪代码
+
+下面这段伪代码不是源码逐行翻译，而是为了说明软件的计算思路。
+
+```python
+# Tensile analysis pipeline
+strain, stress = load_curve_from_excel(file)
+strain = normalize_strain_unit(strain, mode="auto|percent|decimal")
+stress_smooth = savgol_filter(stress, window=SMOOTH_WINDOW)
+
+idx_peak = argmax(stress_smooth)
+sigma_u = stress_smooth[idx_peak]
+epsilon_peak = strain[idx_peak] * 100
+
+fit_region = where((stress_smooth >= 0.10 * sigma_u) &
+                   (stress_smooth <= 0.40 * sigma_u))
+E_eff, intercept = linear_regression(strain[fit_region], stress_smooth[fit_region])
+E_init = robust_initial_tangent_modulus(strain, stress_smooth)
+
+for i in candidate_points_before_peak:
+    deviation = abs(stress_smooth[i] - (E_eff * strain[i] + intercept))
+    stiffness_drop = tangent_modulus[i] < CRACK_STIFFNESS_CONSTRAINT * E_init
+    stress_enough = stress_smooth[i] > CRACK_MIN_STRESS_RATIO * sigma_u
+    if deviation > max(CRACK_TOLERANCE_BASE, CRACK_TOLERANCE_RATIO * sigma_u) \
+       and stiffness_drop \
+       and stress_enough:
+        idx_cr = i
+        break
+
+idx_u = find_post_peak_limit(stress_smooth, idx_peak, ratio=ULTIMATE_STRAIN_RATIO)
+G_F = gauge_length * simpson_integral(stress_smooth[:idx_u], strain[:idx_u])
+```
+
+---
+
+## 参数配置关系
+
+软件的参数会保存到用户目录下的配置文件：
+
+```text
+~/.ecc_analyzer_config.json
+```
+
+可以把当前参数理解成下面这种配置结构：
+
+```yaml
+geometry:
+  gauge_length_mm: 80.0
+
+strain_unit:
+  mode: auto        # auto | percent | decimal
+  auto_threshold: 0.2
+
+modulus:
+  elastic_lower_ratio: 0.10
+  elastic_upper_ratio: 0.40
+
+first_cracking:
+  crack_tolerance_base: 0.03
+  crack_tolerance_ratio: 0.01
+  stiffness_constraint: 0.85
+  min_stress_ratio: 0.10
+
+post_peak:
+  ultimate_strain_ratio: 0.85
+
+visualization:
+  smoothing_window: 15
+  line_width: 1.5
+  theme_color: scientific_blue
+```
+
+---
+
+## 软件架构
+
+### 模块依赖关系
+
+```mermaid
+flowchart LR
+    subgraph UI["app/ui"]
+        A1["main_window_active.py\n当前正式运行窗口"]
+        A2["main_window.py\n基础窗口"]
+        A3["dialogs.py\n参数设置"]
+        A4["plotting.py\nMatplotlib 绘图"]
+    end
+
+    subgraph DATA["app/data"]
+        B1["loader.py\nExcel/CSV 读取"]
+        B2["exporter.py\nExcel 报告导出"]
+    end
+
+    subgraph CORE["app/core"]
+        C1["algorithms.py\n力学分析算法"]
+        C2["physics.py\n参数与单位配置"]
+        C3["statistics.py\n均值/SD/COV"]
+        C4["validators.py\n数据校验"]
+    end
+
+    A1 --> A2
+    A1 --> A3
+    A1 --> A4
+    A1 --> B1
+    A1 --> B2
+    A1 --> C1
+    A1 --> C2
+    A1 --> C3
+    B1 --> C4
+    C1 --> C2
+```
+
+### 用户操作时序
+
+```mermaid
+sequenceDiagram
+    actor User as 用户
+    participant UI as PySide6 界面
+    participant Loader as DataLoader
+    participant Analyzer as Tensile/Compressive Analyzer
+    participant Stats as StatisticsCalculator
+    participant Plot as MplCanvas
+    participant Exporter as DataExporter
+
+    User->>UI: 拖拽或选择 Excel/CSV
+    UI->>Loader: 智能解析 sheet 和样品列
+    Loader-->>UI: 返回 strain / stress 样品列表
+    UI->>Analyzer: 对每个样品运行力学分析
+    Analyzer-->>UI: 返回 σ_cr / σ_u / ε_peak / ε_u / G_F
+    UI->>Stats: 对勾选样品计算均值与标准差
+    Stats-->>UI: 返回 mean / SD / COV
+    UI->>Plot: 绘制曲线与统计图
+    User->>UI: 勾选样品并导出
+    UI->>Exporter: 写入 Excel 报告
+    Exporter-->>User: 导出分析结果
+```
+
+### 状态逻辑
+
+```mermaid
+stateDiagram-v2
+    [*] --> Ready: 启动软件
+    Ready --> Loading: 导入文件
+    Loading --> Analyzing: 读取到有效数据
+    Loading --> Ready: 未识别到有效数据
+    Analyzing --> Visualizing: 计算完成
+    Visualizing --> Configuring: 打开参数设置
+    Configuring --> Analyzing: 保存参数并重新计算
+    Visualizing --> Exporting: 导出报告
+    Exporting --> Visualizing: 导出完成
+    Exporting --> Visualizing: 导出失败并提示
+    Visualizing --> Ready: 清空数据
+```
+
+### 当前项目结构
+
+```text
+ECC_Analyzer_Pro/
+├── main.py                         # 程序入口
+├── README.md                       # 项目说明
+├── USER_GUIDE.md                   # 更详细的用户指南
+├── requirements.txt
+├── scripts/
+│   └── smoke_test.py               # 核心算法烟雾测试
+└── app/
+    ├── core/
+    │   ├── algorithms.py           # 拉伸/抗压核心算法
+    │   ├── physics.py              # 全局配置与默认参数
+    │   ├── statistics.py           # 分组统计
+    │   └── validators.py           # 数据校验
+    ├── data/
+    │   ├── loader.py               # Excel/CSV 读取
+    │   └── exporter.py             # Excel 导出
+    └── ui/
+        ├── main_window.py          # 基础窗口实现
+        ├── main_window_active.py   # 当前正式运行窗口
+        ├── plotting.py             # Matplotlib 绘图
+        └── dialogs.py              # Settings 设置窗口
+```
 
 ---
 
@@ -206,16 +625,16 @@ G_F = L0 × ∫σ(ε)dε
 
 ### 顶部区域
 
-- `Mode`：选择 Tensile 或 Compressive；
-- `Basic Results`：显示常用工程指标；
-- `Advanced Analysis`：显示更偏科研解释的指标；
-- `Export`：导出当前勾选样品；
-- `Settings`：修改单位、初裂、模量、极限点、绘图参数；
-- `Clear`：清空当前数据。
+- `模式`：选择抗拉 Tensile 或抗压 Compressive；
+- `基础结果`：显示常用工程指标；
+- `高级分析`：显示更偏科研解释的指标；
+- `导出报告`：导出当前勾选样品；
+- `参数设置`：修改单位、初裂、模量、极限点、绘图参数；
+- `清空`：清空当前数据。
 
 ### Basic Results
 
-抗拉 Basic 表格现在显示 5 个指标：
+抗拉基础结果表格显示 5 个指标：
 
 | 指标 | 含义 |
 |---|---|
@@ -254,39 +673,11 @@ Sample Group, σ_mean, SD, COV, N
 
 ---
 
-## 项目结构
-
-```text
-ECC_Analyzer_Pro/
-├── main.py                         # 程序入口
-├── README.md                       # 项目说明
-├── USER_GUIDE.md                   # 更详细的用户指南
-├── requirements.txt
-├── scripts/
-│   └── smoke_test.py               # 核心算法烟雾测试
-└── app/
-    ├── core/
-    │   ├── algorithms.py           # 拉伸/抗压核心算法
-    │   ├── physics.py              # 全局配置与默认参数
-    │   ├── statistics.py           # 分组统计
-    │   └── validators.py           # 数据校验
-    ├── data/
-    │   ├── loader.py               # Excel/CSV 读取
-    │   └── exporter.py             # Excel 导出
-    └── ui/
-        ├── main_window.py          # 基础窗口实现
-        ├── main_window_active.py   # 当前正式运行窗口
-        ├── plotting.py             # Matplotlib 绘图
-        └── dialogs.py              # Settings 设置窗口
-```
-
----
-
 ## 常见问题
 
 ### 1. 应变结果大了或小了 100 倍
 
-先检查 **Settings → Input Strain Unit**。如果你的 Excel 表头是 `Strain (%)`，建议选择 `Percent`。
+先检查 **参数设置 → 输入应变单位**。如果 Excel 表头是 `Strain (%)`，建议选择 `Percent`。
 
 ### 2. 抗压值是负数怎么办
 
@@ -314,6 +705,19 @@ ECC_Analyzer_Pro/
 
 尤其是 `Input Strain Unit`、`Gauge Length`、`Rupture Ratio`、`Crack Tolerance` 这些参数，最好在论文方法部分说明。
 
+我个人更倾向于在论文或补充材料里记录如下信息：
+
+```json
+{
+  "software": "ECC Analyzer Pro",
+  "strain_unit": "percent",
+  "gauge_length_mm": 80.0,
+  "elastic_fit_range": [0.10, 0.40],
+  "ultimate_strain_ratio": 0.85,
+  "smooth_window": 15
+}
+```
+
 ---
 
 ## 引用方式
@@ -334,4 +738,6 @@ ECC_Analyzer_Pro/
 
 ## 说明
 
-这是一个个人研究过程中逐步打磨出来的工具，目标是让 ECC / SHCC 数据处理更稳定、更透明、更容易复现。它仍然会继续根据真实数据和论文写作需求迭代。欢迎提出 bug、改进建议或新的数据格式需求。
+这是一个个人研究过程中逐步打磨出来的工具，目标是让 ECC / SHCC 数据处理更稳定、更透明、更容易复现。它仍然会继续根据真实数据和论文写作需求迭代。
+
+我不想把它包装成一个已经完全成熟的商业软件。更准确地说，它是一个正在变得越来越规范的科研工具：先解决真实数据处理问题，再逐步补齐测试、示例模板、打包发布和更完整的工程结构。
