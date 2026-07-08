@@ -12,6 +12,8 @@ class DataLoader:
     - Fix: 智能剔除样品名之前的序号列 (如 "1  FSC-AIR  27.7" 中的 1)。
     """
 
+    MIN_CURVE_POINTS = 5
+
     @staticmethod
     def load_file_smart(file_path: Path, max_sheets: int = 10, mode: str = "Tensile") -> Tuple[
         Optional[List[Dict]], Optional[str]]:
@@ -63,20 +65,20 @@ class DataLoader:
     def _parse_dataframe(df: pd.DataFrame, mode: str) -> List[Dict]:
         df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
 
-        # 抗压模式：绝大多数情况是汇总表 (Row Summary)
         if "Compressive" in mode:
-            samples_row = DataLoader._load_row_based_summary(df)
-            if samples_row and len(samples_row) > 0:
-                return samples_row
-            # 兜底：如果是全曲线数据
-            return DataLoader._load_column_based_curve(df)
-        else:
-            # 抗拉模式：优先尝试曲线读取
-            if df.shape[0] >= 5:
+            # 抗压文件可能是汇总表，也可能是完整曲线。先识别曲线，避免把曲线行误拆成海量单点强度。
+            if df.shape[0] >= DataLoader.MIN_CURVE_POINTS:
                 samples_curve = DataLoader._load_column_based_curve(df)
                 if samples_curve and len(samples_curve) > 0:
                     return samples_curve
             return DataLoader._load_row_based_summary(df)
+        else:
+            # 抗拉模式：优先尝试曲线读取
+            if df.shape[0] >= DataLoader.MIN_CURVE_POINTS:
+                samples_curve = DataLoader._load_column_based_curve(df)
+                if samples_curve and len(samples_curve) > 0:
+                    return samples_curve
+            return []
 
     @staticmethod
     def _is_invalid_name(name_str: str) -> bool:
@@ -131,10 +133,16 @@ class DataLoader:
                         break
 
                 sub_df = df.iloc[data_start_idx:, i:i + 2].apply(pd.to_numeric, errors='coerce').dropna()
-                if not sub_df.empty and len(sub_df) > 3:
+                if not sub_df.empty and len(sub_df) >= DataLoader.MIN_CURVE_POINTS:
                     strain = sub_df.iloc[:, 0].values.astype(float)
                     stress = sub_df.iloc[:, 1].values.astype(float)
-                    if np.max(np.abs(stress)) > 0.001:
+                    unique_strain_count = len(np.unique(strain))
+                    stress_span = np.nanmax(stress) - np.nanmin(stress)
+                    if (
+                            unique_strain_count >= DataLoader.MIN_CURVE_POINTS
+                            and stress_span > 1e-9
+                            and np.max(np.abs(stress)) > 0.001
+                    ):
                         samples.append({"name": sample_name, "strain": strain, "stress": stress, "type": "Curve"})
             except:
                 continue
@@ -150,18 +158,28 @@ class DataLoader:
         """
         samples = []
         current_name = "Sample_Unknown"
+        header_row, value_columns = DataLoader._detect_summary_value_columns(df)
 
-        for index, row in df.iterrows():
+        for row_pos, (index, row) in enumerate(df.iterrows()):
+            if header_row is not None and row_pos <= header_row:
+                continue
+
             row_values = row.values
             row_numbers = []
             found_name_in_this_row = False
 
-            for cell in row_values:
+            for col_idx, cell in enumerate(row_values):
                 if pd.isna(cell) or str(cell).strip() == "": continue
                 s_cell = str(cell).strip()
 
+                if value_columns is not None and col_idx not in value_columns:
+                    if not found_name_in_this_row and not DataLoader._is_invalid_name(s_cell):
+                        current_name = s_cell
+                        found_name_in_this_row = True
+                    continue
+
                 try:
-                    val = float(s_cell)
+                    val = float(s_cell) * (value_columns[col_idx] if value_columns is not None else 1.0)
                     row_numbers.append(val)
                 except ValueError:
                     # 遇到文本 -> 检查是否为名字
@@ -177,8 +195,12 @@ class DataLoader:
                         current_name = s_cell
                         found_name_in_this_row = True
 
-            # 归档数据
+            # 归档数据。行式汇总通常是一行一个样品名加少量强度值；
+            # 没有样品名的长数字行更可能是曲线数据，不应按汇总强度导入。
             if row_numbers:
+                if not found_name_in_this_row and len(row_numbers) > 3:
+                    continue
+
                 # 过滤掉 0 值和极小值
                 valid_stress = [v for v in row_numbers if v > 0.001]
                 for v in valid_stress:
@@ -189,3 +211,29 @@ class DataLoader:
                         "type": "Summary"
                     })
         return samples
+
+    @staticmethod
+    def _detect_summary_value_columns(df: pd.DataFrame) -> Tuple[Optional[int], Optional[Dict[int, float]]]:
+        """识别带表头汇总表中的强度列，并返回单位换算系数。"""
+        for row_pos in range(min(3, df.shape[0])):
+            value_columns = {}
+            row = df.iloc[row_pos]
+            for col_idx, cell in enumerate(row.values):
+                if pd.isna(cell):
+                    continue
+                label = str(cell).strip().lower()
+                if not label:
+                    continue
+
+                is_stress = "stress" in label or "应力" in label or "應力" in label
+                is_excluded = any(token in label for token in ["load", "载荷", "載荷", "length", "width", "长度", "長度", "宽度", "寬度"])
+                if is_stress and not is_excluded:
+                    scale = 1.0
+                    if "dyn/cm" in label:
+                        scale = 1e-7
+                    value_columns[col_idx] = scale
+
+            if value_columns:
+                return row_pos, value_columns
+
+        return None, None
