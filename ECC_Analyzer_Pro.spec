@@ -7,10 +7,8 @@ onedir portable package instead of a single-file executable. Onedir builds are
 larger, but they are usually much more stable for Qt desktop applications.
 """
 
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-
-block_cipher = None
 
 # Matplotlib needs its font/data files at runtime.
 datas = []
@@ -22,7 +20,10 @@ datas += [
     ("USER_GUIDE.md", "."),
 ]
 
-hiddenimports = [
+hiddenimports = []
+hiddenimports += collect_submodules("PySide6")
+hiddenimports += collect_submodules("matplotlib.backends")
+hiddenimports += [
     "matplotlib.backends.backend_qtagg",
     "mplcursors",
     "scipy.signal",
@@ -43,13 +44,11 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
     noarchive=False,
+    optimize=0,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz,
