@@ -1,68 +1,88 @@
-import pandas as pd
-import numpy as np
 from pathlib import Path
-from typing import List, Dict, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
 
 
 class DataLoader:
-    """
-    Smart data loader for ECC Analyzer Pro.
-
-    Supported layouts
-    -----------------
-    1. Column-pair curves: strain/stress, strain/stress, ...
-    2. Compressive row summaries: group name + one or more strength values.
-
-    Compressive summary values are stored as positive magnitudes so files exported
-    by machines with negative compressive stress convention remain usable.
-    """
-
     MIN_CURVE_POINTS = 5
 
     @staticmethod
-    def load_file_smart(file_path: Path, max_sheets: int = 10, mode: str = "Tensile") -> Tuple[Optional[List[Dict]], Optional[str]]:
-        all_samples = []
+    def load_file_smart(
+        file_path: Path,
+        max_sheets: int = 10,
+        mode: str = "Tensile",
+    ) -> Tuple[Optional[List[Dict]], Optional[str]]:
+        file_path = Path(file_path)
+        ext = file_path.suffix.lower()
+        if ext not in {".xlsx", ".xls", ".csv"}:
+            return None, f"Unsupported format: {ext}"
+
+        if ext == ".csv":
+            try:
+                df = pd.read_csv(
+                    file_path,
+                    header=None,
+                    sep=None,
+                    engine="python",
+                    on_bad_lines="error",
+                )
+                samples = DataLoader._parse_dataframe(df, mode)
+            except Exception as exc:
+                return None, f"CSV Parse Error: {exc}"
+
+            if not samples:
+                return None, "CSV 中没有识别到有效曲线。"
+            for sample in samples:
+                sample["sheet_name"] = "CSV"
+            return samples, None
+
         try:
-            ext = file_path.suffix.lower()
-            if ext not in [".xlsx", ".xls", ".csv"]:
-                return None, f"Unsupported format: {ext}"
+            xls = pd.ExcelFile(file_path)
+        except Exception:
+            try:
+                xls = pd.ExcelFile(file_path, engine="xlrd")
+            except Exception as exc:
+                return None, f"Cannot open Excel file: {exc}"
 
-            if ext == ".csv":
+        all_samples: List[Dict] = []
+        errors: list[str] = []
+        try:
+            for sheet_name in xls.sheet_names[:max_sheets]:
                 try:
-                    df = pd.read_csv(file_path, header=None, sep=None, engine="python", on_bad_lines="skip")
+                    df = pd.read_excel(xls, sheet_name=sheet_name, header=None)
+                except Exception as exc:
+                    errors.append(f"{sheet_name}: read failed ({exc})")
+                    continue
+
+                if df.empty:
+                    continue
+
+                try:
                     samples = DataLoader._parse_dataframe(df, mode)
-                    for s in samples:
-                        s["sheet_name"] = "CSV"
-                    all_samples.extend(samples)
-                except Exception as e:
-                    return None, f"CSV Parse Error: {e}"
-            else:
-                try:
-                    xls = pd.ExcelFile(file_path)
-                except Exception:
-                    try:
-                        xls = pd.ExcelFile(file_path, engine="xlrd")
-                    except Exception:
-                        return None, "Cannot open Excel file."
+                except Exception as exc:
+                    errors.append(f"{sheet_name}: parse failed ({exc})")
+                    continue
 
-                for sheet_name in xls.sheet_names[:max_sheets]:
-                    try:
-                        df = pd.read_excel(xls, sheet_name=sheet_name, header=None)
-                        if df.empty:
-                            continue
-                        samples = DataLoader._parse_dataframe(df, mode)
-                        for s in samples:
-                            s["sheet_name"] = sheet_name
-                        all_samples.extend(samples)
-                    except Exception:
-                        continue
-                xls.close()
+                if not samples:
+                    errors.append(f"{sheet_name}: no valid data")
+                    continue
 
-            if all_samples:
-                return all_samples, None
+                for sample in samples:
+                    sample["sheet_name"] = sheet_name
+                all_samples.extend(samples)
+        finally:
+            xls.close()
+
+        if errors:
+            detail = "; ".join(errors[:8])
+            if len(errors) > 8:
+                detail += f"; 另有 {len(errors) - 8} 个错误"
+            return None, f"部分工作表解析失败，已中止导入：{detail}"
+        if not all_samples:
             return None, "No valid data found."
-        except Exception as e:
-            return None, f"Load Error: {str(e)}"
+        return all_samples, None
 
     @staticmethod
     def _parse_dataframe(df: pd.DataFrame, mode: str) -> List[Dict]:
@@ -71,29 +91,26 @@ class DataLoader:
             return []
 
         if "Compressive" in mode:
-            # Try true curve parsing first. A summary table whose first two columns are
-            # name/value will usually fail this check and fall back to row parsing.
             if df.shape[0] >= DataLoader.MIN_CURVE_POINTS:
-                samples_curve = DataLoader._load_column_based_curve(df)
-                if samples_curve:
-                    return samples_curve
+                curves = DataLoader._load_column_based_curve(df)
+                if curves:
+                    return curves
             return DataLoader._load_row_based_summary(df)
 
-        if df.shape[0] >= DataLoader.MIN_CURVE_POINTS:
-            samples_curve = DataLoader._load_column_based_curve(df)
-            if samples_curve:
-                return samples_curve
-        return []
+        if df.shape[0] < DataLoader.MIN_CURVE_POINTS:
+            return []
+        return DataLoader._load_column_based_curve(df)
 
     @staticmethod
     def _is_invalid_name(name_str: str) -> bool:
         if not name_str:
             return True
-        s = str(name_str).strip().lower()
+
+        value = str(name_str).strip().lower()
         try:
-            float(s)
+            float(value)
             return True
-        except Exception:
+        except ValueError:
             pass
 
         invalid_keywords = [
@@ -102,73 +119,73 @@ class DataLoader:
             "time", "sec", "min", "machine", "specimen", "date", "no.", "id",
             "应变", "應變", "应力", "應力", "载荷", "載荷", "位移",
         ]
-        if s in invalid_keywords:
+        if value in invalid_keywords:
             return True
-        if any(f"({k})" in s for k in invalid_keywords):
-            return True
-        return False
+        return any(f"({keyword})" in value for keyword in invalid_keywords)
+
+    @staticmethod
+    def _find_data_start(df: pd.DataFrame, col_a: int, col_b: int) -> int | None:
+        for row in range(min(15, df.shape[0])):
+            try:
+                float(df.iloc[row, col_a])
+                float(df.iloc[row, col_b])
+                return row
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    @staticmethod
+    def _sample_name(df: pd.DataFrame, data_start: int, col_a: int, col_b: int, fallback: str) -> str:
+        for row in range(data_start - 1, -1, -1):
+            value = df.iloc[row, col_a]
+            if pd.isna(value) or not str(value).strip():
+                value = df.iloc[row, col_b]
+            if pd.isna(value):
+                continue
+            text = str(value).strip()
+            if text and not DataLoader._is_invalid_name(text):
+                return text
+        return fallback
 
     @staticmethod
     def _load_column_based_curve(df: pd.DataFrame) -> List[Dict]:
-        samples = []
-        cols = df.shape[1]
-        for i in range(0, cols, 2):
-            if i + 1 >= cols:
+        samples: List[Dict] = []
+        for col in range(0, df.shape[1], 2):
+            if col + 1 >= df.shape[1]:
                 break
-            try:
-                data_start_idx = -1
-                for r in range(min(15, df.shape[0])):
-                    try:
-                        float(df.iloc[r, i])
-                        float(df.iloc[r, i + 1])
-                        data_start_idx = r
-                        break
-                    except Exception:
-                        continue
 
-                if data_start_idx == -1:
-                    continue
-
-                sample_name = f"Specimen_{i // 2 + 1}"
-                for r in range(data_start_idx - 1, -1, -1):
-                    val = df.iloc[r, i]
-                    if pd.isna(val) or str(val).strip() == "":
-                        val = df.iloc[r, i + 1]
-                    s_val = str(val).strip()
-                    if not pd.isna(val) and s_val and not DataLoader._is_invalid_name(s_val):
-                        sample_name = s_val
-                        break
-
-                sub_df = df.iloc[data_start_idx:, i:i + 2].apply(pd.to_numeric, errors="coerce").dropna()
-                if sub_df.empty or len(sub_df) < DataLoader.MIN_CURVE_POINTS:
-                    continue
-
-                strain = sub_df.iloc[:, 0].values.astype(float)
-                stress = sub_df.iloc[:, 1].values.astype(float)
-                unique_strain_count = len(np.unique(strain))
-                stress_span = np.nanmax(stress) - np.nanmin(stress)
-
-                if (
-                    unique_strain_count >= DataLoader.MIN_CURVE_POINTS
-                    and stress_span > 1e-9
-                    and np.max(np.abs(stress)) > 0.001
-                ):
-                    samples.append({"name": sample_name, "strain": strain, "stress": stress, "type": "Curve"})
-            except Exception:
+            data_start = DataLoader._find_data_start(df, col, col + 1)
+            if data_start is None:
                 continue
+
+            sub_df = (
+                df.iloc[data_start:, col:col + 2]
+                .apply(pd.to_numeric, errors="coerce")
+                .dropna()
+            )
+            if len(sub_df) < DataLoader.MIN_CURVE_POINTS:
+                continue
+
+            strain = sub_df.iloc[:, 0].to_numpy(dtype=float)
+            stress = sub_df.iloc[:, 1].to_numpy(dtype=float)
+            if len(np.unique(strain)) < DataLoader.MIN_CURVE_POINTS:
+                continue
+            if np.ptp(stress) <= 1e-9 or np.max(np.abs(stress)) <= 0.001:
+                continue
+
+            name = DataLoader._sample_name(
+                df,
+                data_start,
+                col,
+                col + 1,
+                f"Specimen_{col // 2 + 1}",
+            )
+            samples.append({"name": name, "strain": strain, "stress": stress, "type": "Curve"})
         return samples
 
     @staticmethod
     def _load_row_based_summary(df: pd.DataFrame) -> List[Dict]:
-        """
-        Parse compressive summary rows.
-
-        Examples:
-        - FSC-AIR  27.7  31.0
-        - 1  FSC-AIR  27.7
-        - Group, Stress-1, Stress-2, Stress-3
-        """
-        samples = []
+        samples: List[Dict] = []
         current_name = "Sample_Unknown"
         header_row, value_columns = DataLoader._detect_summary_value_columns(df)
 
@@ -176,72 +193,65 @@ class DataLoader:
             if header_row is not None and row_pos <= header_row:
                 continue
 
-            row_values = row.values
             row_numbers = []
-            found_name_in_this_row = False
-
-            for col_idx, cell in enumerate(row_values):
-                if pd.isna(cell) or str(cell).strip() == "":
+            found_name = False
+            for col_idx, cell in enumerate(row.values):
+                if pd.isna(cell) or not str(cell).strip():
                     continue
-                s_cell = str(cell).strip()
+                text = str(cell).strip()
 
                 if value_columns is not None and col_idx not in value_columns:
-                    if not found_name_in_this_row and not DataLoader._is_invalid_name(s_cell):
-                        current_name = s_cell
-                        found_name_in_this_row = True
+                    if not found_name and not DataLoader._is_invalid_name(text):
+                        current_name = text
+                        found_name = True
                     continue
 
                 try:
                     scale = value_columns[col_idx] if value_columns is not None else 1.0
-                    val = float(s_cell) * scale
-                    row_numbers.append(val)
+                    row_numbers.append(float(text) * scale)
                 except ValueError:
-                    if not found_name_in_this_row and not DataLoader._is_invalid_name(s_cell):
-                        # If a sample name appears after a small numeric prefix, that
-                        # prefix is likely an index column rather than strength.
+                    if not found_name and not DataLoader._is_invalid_name(text):
                         if 0 < len(row_numbers) < 3:
                             row_numbers = []
-                        current_name = s_cell
-                        found_name_in_this_row = True
+                        current_name = text
+                        found_name = True
 
-            if row_numbers:
-                # A long all-numeric row without a sample name is more likely a curve
-                # row than a summary row, so do not explode it into many fake samples.
-                if not found_name_in_this_row and len(row_numbers) > 3:
+            if not row_numbers or (not found_name and len(row_numbers) > 3):
+                continue
+
+            for value in row_numbers:
+                if abs(value) <= 0.001:
                     continue
-
-                valid_stress = [abs(float(v)) for v in row_numbers if abs(float(v)) > 0.001]
-                for v in valid_stress:
-                    samples.append({
+                samples.append(
+                    {
                         "name": current_name,
                         "strain": np.array([0.0]),
-                        "stress": np.array([v]),
+                        "stress": np.array([abs(float(value))]),
                         "type": "Summary",
-                    })
+                    }
+                )
         return samples
 
     @staticmethod
-    def _detect_summary_value_columns(df: pd.DataFrame) -> Tuple[Optional[int], Optional[Dict[int, float]]]:
-        """Detect stress columns in a header row and optional unit scales."""
+    def _detect_summary_value_columns(
+        df: pd.DataFrame,
+    ) -> Tuple[Optional[int], Optional[Dict[int, float]]]:
         for row_pos in range(min(3, df.shape[0])):
-            value_columns = {}
-            row = df.iloc[row_pos]
-            for col_idx, cell in enumerate(row.values):
+            value_columns: Dict[int, float] = {}
+            for col_idx, cell in enumerate(df.iloc[row_pos].values):
                 if pd.isna(cell):
                     continue
                 label = str(cell).strip().lower()
                 if not label:
                     continue
 
-                is_stress = "stress" in label or "应力" in label or "應力" in label or "strength" in label or "强度" in label
-                is_excluded = any(token in label for token in [
-                    "load", "载荷", "載荷", "length", "width", "长度", "長度", "宽度", "寬度",
-                ])
+                is_stress = any(token in label for token in ("stress", "应力", "應力", "strength", "强度"))
+                is_excluded = any(
+                    token in label
+                    for token in ("load", "载荷", "載荷", "length", "width", "长度", "長度", "宽度", "寬度")
+                )
                 if is_stress and not is_excluded:
-                    scale = 1.0
-                    if "dyn/cm" in label:
-                        scale = 1e-7
-                    value_columns[col_idx] = scale
+                    value_columns[col_idx] = 1e-7 if "dyn/cm" in label else 1.0
 
             if value_columns:
                 return row_pos, value_columns
