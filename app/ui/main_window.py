@@ -2,6 +2,7 @@ import sys
 import numpy as np
 import traceback
 from datetime import datetime
+from uuid import uuid4
 from pathlib import Path
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                                QPushButton, QTableWidget, QTableWidgetItem,
@@ -527,7 +528,7 @@ class MainWindow(QMainWindow):
             if item is not None and (item.flags() & Qt.ItemIsUserCheckable) and item.checkState() == Qt.Unchecked:
                 result = item.data(Qt.UserRole)
                 if isinstance(result, dict):
-                    unchecked_ids.add(id(result))
+                    unchecked_ids.add(result["_ecc_row_id"])
 
         current_tab = self.tabs.currentIndex()
         self._refresh_headers()
@@ -634,7 +635,7 @@ class MainWindow(QMainWindow):
                 if it.checkState() == Qt.Checked and isinstance(d, dict):
                     del_list.append(d)
                 elif isinstance(d, dict):
-                    keep_ids.add(id(d))
+                    keep_ids.add(d["_ecc_row_id"])
 
             if not del_list:
                 self.table.blockSignals(False)
@@ -645,9 +646,9 @@ class MainWindow(QMainWindow):
                 self.table.blockSignals(False)
                 return
 
-            removed_ids = {id(d) for d in del_list}
+            removed_ids = {d["_ecc_row_id"] for d in del_list}
             old_count = len(self.current_results)
-            self.current_results = [d for d in self.current_results if id(d) not in removed_ids]
+            self.current_results = [d for d in self.current_results if d["_ecc_row_id"] not in removed_ids]
             removed = old_count - len(self.current_results)
 
             if removed: self._repopulate_table_and_charts(keep_ids)
@@ -659,7 +660,7 @@ class MainWindow(QMainWindow):
                     del_names.add(self.table.item(r, 1).text())
                 else:
                     d = self.table.item(r, 0).data(Qt.UserRole)
-                    if isinstance(d, dict): keep_ids.add(id(d))
+                    if isinstance(d, dict): keep_ids.add(d["_ecc_row_id"])
 
             if not del_names:
                 self.table.blockSignals(False)
@@ -670,10 +671,12 @@ class MainWindow(QMainWindow):
                 self.table.blockSignals(False)
                 return
 
-            for res in list(self.current_results):
-                if str(res.get("Sample ID", "")).strip() in del_names:
-                    self.current_results.remove(res)
-                    removed += 1
+            old_count = len(self.current_results)
+            self.current_results = [
+                res for res in self.current_results
+                if str(res.get("Sample ID", "")).strip() not in del_names
+            ]
+            removed = old_count - len(self.current_results)
 
             if removed: self._repopulate_table_and_charts(keep_ids)
 
@@ -821,7 +824,7 @@ class MainWindow(QMainWindow):
 
         check_item = self._create_item("", is_header=False, align=Qt.AlignLeft | Qt.AlignVCenter)
         check_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsSelectable)
-        check_item.setCheckState(Qt.Unchecked if keep_ids and id(d) in keep_ids else Qt.Checked)
+        check_item.setCheckState(Qt.Unchecked if keep_ids and d["_ecc_row_id"] in keep_ids else Qt.Checked)
         check_item.setData(Qt.UserRole, d)
         self.table.setItem(r, 0, check_item)
         self.table.setItem(r, 1, self._create_item(d.get("Sample ID", "Unknown"), align=Qt.AlignLeft | Qt.AlignVCenter))
@@ -913,7 +916,7 @@ class MainWindow(QMainWindow):
 
             it = self._create_item("", is_header=False, align=Qt.AlignLeft | Qt.AlignVCenter)
             it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsSelectable)
-            it.setCheckState(Qt.Unchecked if keep_ids and id(d['first']) in keep_ids else Qt.Checked)
+            it.setCheckState(Qt.Unchecked if keep_ids and d['first']["_ecc_row_id"] in keep_ids else Qt.Checked)
             it.setData(Qt.UserRole, d['first'])
             self.table.setItem(r, 0, it)
 
@@ -960,6 +963,8 @@ class MainWindow(QMainWindow):
     def _repopulate_table_and_charts(self, preserved_ids=None):
         if preserved_ids is None:
             preserved_ids = set()
+        for result in self.current_results:
+            result.setdefault("_ecc_row_id", uuid4().hex)
 
         self.table.setUpdatesEnabled(False)
         self.table.blockSignals(True)
