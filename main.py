@@ -43,8 +43,7 @@ def main():
         if str(resource_root) not in sys.path:
             sys.path.insert(0, str(resource_root))
 
-        # 正式运行窗口：基础 UI 在 app.ui.main_window 中，当前生效行为集中在 active 层维护。
-        from app.ui.main_window_active import MainWindow
+        from app.ui.main_window import MainWindow
 
         window = MainWindow()
         window.show()

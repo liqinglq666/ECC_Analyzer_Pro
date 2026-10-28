@@ -52,13 +52,34 @@ class ViewSwitcher(QFrame):
         self.group.buttonClicked.connect(self._on_click)
 
     def _create_btn(self, text):
-        btn = QPushButton(text)
+        display_text = {
+            "Basic Results": "基础结果",
+            "Advanced Analysis": "高级分析",
+        }.get(text, text)
+
+        btn = QPushButton(display_text)
         btn.setCheckable(True)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet("""
-            QPushButton { border: none; border-radius: 15px; color: #5f6368; font-weight: 600; padding: 0 15px; background: transparent; font-family: 'Segoe UI', sans-serif; }
-            QPushButton:hover { color: #202124; background-color: rgba(0,0,0,0.05); }
-            QPushButton:checked { background-color: white; color: #1a73e8; font-weight: bold; border: 1px solid #dadce0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+            QPushButton {
+                border: none;
+                border-radius: 15px;
+                color: #5f6368;
+                font-weight: 600;
+                padding: 0 16px;
+                background: transparent;
+                font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+            }
+            QPushButton:hover {
+                color: #202124;
+                background-color: rgba(0,0,0,0.05);
+            }
+            QPushButton:checked {
+                background-color: white;
+                color: #1a73e8;
+                font-weight: 700;
+                border: 1px solid #dadce0;
+            }
         """)
         return btn
 
@@ -90,11 +111,11 @@ class DragDropWidget(QFrame):
         self.lbl_icon.setAlignment(Qt.AlignCenter)
         self.lbl_icon.setStyleSheet("font-size: 48px; color: #9aa0a6; background: transparent;")
 
-        self.lbl_main = QLabel("Import Data Files")
+        self.lbl_main = QLabel("导入试验数据")
         self.lbl_main.setAlignment(Qt.AlignCenter)
         self.lbl_main.setStyleSheet("font-size: 16px; font-weight: bold; color: #3c4043; background: transparent;")
 
-        self.lbl_sub = QLabel("Drag & Drop .xlsx / .csv here\nor click to browse")
+        self.lbl_sub = QLabel("拖拽 .xlsx / .csv 文件到这里\n或点击选择文件")
         self.lbl_sub.setAlignment(Qt.AlignCenter)
         self.lbl_sub.setStyleSheet("font-size: 13px; color: #70757a; background: transparent;")
 
@@ -141,7 +162,7 @@ class DragDropWidget(QFrame):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ECC Analyzer Pro")
+        self.setWindowTitle("ECC Analyzer Pro｜ECC/SHCC 力学数据分析")
         self.resize(1440, 920)
         self.setAcceptDrops(True)
         MaterialConstants.load_config()
@@ -170,7 +191,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self._setup_right_panel())
 
         # [优化] 调整 Splitter 初始比例，给予左侧数据面板更多的初始宽度
-        splitter.setSizes([560, 880])
+        splitter.setSizes([700, 740])
 
         main_layout.addWidget(splitter)
         self._refresh_headers()
@@ -195,9 +216,9 @@ class MainWindow(QMainWindow):
         line.setStyleSheet("color: #dadce0;")
         h_layout.addWidget(line)
 
-        h_layout.addWidget(QLabel("Mode:", styleSheet="color: #5f6368; font-weight: 600; font-size: 13px;"))
+        h_layout.addWidget(QLabel("模式：", styleSheet="color: #5f6368; font-weight: 600; font-size: 13px;"))
         self.combo_mode = QComboBox()
-        self.combo_mode.addItems(["Tensile (抗拉)", "Compressive (抗压)"])
+        self.combo_mode.addItems(["抗拉 Tensile", "抗压 Compressive"])
         self.combo_mode.setFixedWidth(160)
         self.combo_mode.setCursor(Qt.PointingHandCursor)
         self.combo_mode.setStyleSheet("""
@@ -230,15 +251,15 @@ class MainWindow(QMainWindow):
             """)
             return btn
 
-        self.btn_export = make_action_btn("Export", "💾", primary=True)
+        self.btn_export = make_action_btn("导出报告", "💾", primary=True)
         self.btn_export.clicked.connect(self.export_data)
         h_layout.addWidget(self.btn_export)
 
-        self.btn_settings = make_action_btn("Settings", "⚙️")
+        self.btn_settings = make_action_btn("参数设置", "⚙️")
         self.btn_settings.clicked.connect(self.open_settings)
         h_layout.addWidget(self.btn_settings)
 
-        self.btn_clear = make_action_btn("Clear", "🗑️", danger=True)
+        self.btn_clear = make_action_btn("清空", "🗑️", danger=True)
         self.btn_clear.clicked.connect(self._clear_all_data)
         h_layout.addWidget(self.btn_clear)
         return header
@@ -246,7 +267,7 @@ class MainWindow(QMainWindow):
     def _setup_left_panel(self):
         left_panel = QFrame()
         # [优化] 提升左侧最小宽度限制，防过度挤压
-        left_panel.setMinimumWidth(520)
+        left_panel.setMinimumWidth(640)
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(16, 16, 12, 16)
         left_layout.setSpacing(16)
@@ -269,20 +290,20 @@ class MainWindow(QMainWindow):
             """)
             return btn
 
-        self.btn_all = make_tool_btn("☑ All", "#d2e3fc")
+        self.btn_all = make_tool_btn("☑ 全选", "#d2e3fc")
         self.btn_all.clicked.connect(self.toggle_select_all)
         t_tools.addWidget(self.btn_all)
         t_tools.addStretch()
 
-        btn_refresh = make_tool_btn("🔄 Calc", "#feefc3")
+        btn_refresh = make_tool_btn("🔄 重新计算", "#feefc3")
         btn_refresh.clicked.connect(self.refresh_statistics_from_selection)
         t_tools.addWidget(btn_refresh)
 
-        btn_copy = make_tool_btn("📋 Copy", "#ceead6")
+        btn_copy = make_tool_btn("📋 复制表格", "#ceead6")
         btn_copy.clicked.connect(self.copy_table_to_clipboard)
         t_tools.addWidget(btn_copy)
 
-        btn_delete = make_tool_btn("🗑️ Del", "#fad2cf")
+        btn_delete = make_tool_btn("🗑️ 删除勾选", "#fad2cf")
         btn_delete.clicked.connect(self.delete_checked_items)
         t_tools.addWidget(btn_delete)
         left_layout.addLayout(t_tools)
@@ -313,7 +334,7 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.table)
 
         status_bar = QHBoxLayout()
-        self.lbl_status = QLabel("Ready")
+        self.lbl_status = QLabel("就绪")
         self.lbl_status.setStyleSheet("color: #5f6368; font-size: 12px; font-weight: 500;")
         status_bar.addWidget(self.lbl_status)
         self.progress = QProgressBar()
@@ -342,7 +363,7 @@ class MainWindow(QMainWindow):
         """)
 
         self.bar_canvas = MplCanvas(self)
-        self.tabs.addTab(self.bar_canvas, "📊 Statistics")
+        self.tabs.addTab(self.bar_canvas, "📊 统计图")
 
         c_widget = QWidget()
         c_layout = QVBoxLayout(c_widget)
@@ -354,7 +375,7 @@ class MainWindow(QMainWindow):
         self.toolbar.setStyleSheet("background: white; border: none;")
         c_layout.addWidget(self.toolbar)
         c_layout.addWidget(self.curve_canvas)
-        self.tabs.addTab(c_widget, "📈 Curves")
+        self.tabs.addTab(c_widget, "📈 曲线图")
         right_layout.addWidget(self.tabs)
 
         vis_ctrl = QFrame()
@@ -365,7 +386,7 @@ class MainWindow(QMainWindow):
         vc_layout.setContentsMargins(20, 5, 20, 5)
         vc_layout.setSpacing(20)
 
-        self.chk_params = QCheckBox("Show Annotations")
+        self.chk_params = QCheckBox("显示参数标注")
         self.chk_params.setChecked(True)
         self.chk_params.setCursor(Qt.PointingHandCursor)
         self.chk_params.setStyleSheet("QCheckBox { font-weight: 600; color: #3c4043; }")
@@ -373,17 +394,17 @@ class MainWindow(QMainWindow):
         vc_layout.addWidget(self.chk_params)
         vc_layout.addStretch()
 
-        lbl_col = QLabel("Theme:")
+        lbl_col = QLabel("配色：")
         lbl_col.setStyleSheet("color: #5f6368; font-weight: bold;")
         vc_layout.addWidget(lbl_col)
         self.combo_color_main = QComboBox()
-        self.combo_color_main.addItems(["Blue", "Gray", "Black", "Red", "Green"])
+        self.combo_color_main.addItems(["科研蓝", "中性灰", "黑色", "红色", "绿色"])
         self.combo_color_main.setFixedWidth(100)
         self.combo_color_main.setCursor(Qt.PointingHandCursor)
         self.combo_color_main.currentIndexChanged.connect(self.on_visual_changed)
         vc_layout.addWidget(self.combo_color_main)
 
-        self.btn_save_img = QPushButton("📷 Save Image")
+        self.btn_save_img = QPushButton("📷 保存图片")
         self.btn_save_img.setCursor(Qt.PointingHandCursor)
         self.btn_save_img.setFixedHeight(32)
         self.btn_save_img.setStyleSheet("""
@@ -425,28 +446,28 @@ class MainWindow(QMainWindow):
         self.check_overlay_status()
 
     def check_overlay_status(self):
-        sel = []
+        selected = []
         for r in range(self.table.rowCount()):
             item = self.table.item(r, 0)
-            if item.checkState() == Qt.Checked:
+            if item and item.checkState() == Qt.Checked:
                 data = item.data(Qt.UserRole)
                 if isinstance(data, dict) and "Type" in data:
-                    sel.append(data)
+                    selected.append(data)
 
-        if sel:
+        if selected:
             self.tabs.setCurrentIndex(1)
-            target_type = sel[0]["Type"]
-            filt = [d for d in sel if d.get("Type") == target_type]
-            if len(filt) > 1:
-                self.curve_canvas.plot_multi_tensile(filt)
-                self.lbl_status.setText(f"Overlay: {len(filt)} samples.")
-            elif len(filt) == 1:
-                self.plot_curve_detail(filt[0])
-                self.lbl_status.setText(f"Detail: {filt[0]['Sample ID']}")
+            target_type = selected[0]["Type"]
+            filtered = [d for d in selected if d.get("Type") == target_type]
+            if len(filtered) > 1:
+                self.curve_canvas.plot_multi_tensile(filtered)
+                self.lbl_status.setText(f"已叠加 {len(filtered)} 个样品。")
+            elif len(filtered) == 1:
+                self.plot_curve_detail(filtered[0])
+                self.lbl_status.setText(f"当前样品：{filtered[0]['Sample ID']}")
         else:
             self.curve_canvas.clear_plot()
             self.curve_canvas.draw()
-            self.lbl_status.setText("No selection.")
+            self.lbl_status.setText("未勾选样品。")
 
     def on_visual_changed(self):
         c_map = {0: "#2c3e50", 1: "#7f8c8d", 2: "#000000", 3: "#c0392b", 4: "#27ae60"}
@@ -465,7 +486,7 @@ class MainWindow(QMainWindow):
     def copy_table_to_clipboard(self):
         selected = self.table.selectedRanges()
         if not selected:
-            QMessageBox.information(self, "Copy", "Select cells first.")
+            QMessageBox.information(self, "复制表格", "请先在表格中选中需要复制的单元格。")
             return
         selected.sort(key=lambda r: r.topRow())
         text = ""
@@ -473,18 +494,18 @@ class MainWindow(QMainWindow):
         for i in range(r.topRow(), r.bottomRow() + 1):
             row = []
             for j in range(r.leftColumn(), r.rightColumn() + 1):
-                it = self.table.item(i, j)
-                row.append(it.text() if it else "")
+                item = self.table.item(i, j)
+                row.append(item.text() if item else "")
             text += "\t".join(row) + "\n"
         QApplication.clipboard().setText(text)
-        self.lbl_status.setText("Table Copied!")
+        self.lbl_status.setText("表格内容已复制到剪贴板。")
 
     def show_chart_context_menu(self, pos):
         menu = QMenu(self)
-        act_copy = QAction("Copy Image to Clipboard", self)
+        act_copy = QAction("复制图片到剪贴板", self)
         act_copy.triggered.connect(self.copy_chart_to_clipboard)
         menu.addAction(act_copy)
-        act_save = QAction("Save Image As...", self)
+        act_save = QAction("另存图片...", self)
         act_save.triggered.connect(self.save_chart_to_file)
         menu.addAction(act_save)
         menu.exec(self.curve_canvas.mapToGlobal(pos))
@@ -493,7 +514,7 @@ class MainWindow(QMainWindow):
         pixmap = QPixmap(self.curve_canvas.size())
         self.curve_canvas.render(pixmap)
         QApplication.clipboard().setPixmap(pixmap)
-        self.lbl_status.setText("Image copied.")
+        self.lbl_status.setText("图像已复制到剪贴板。")
 
     def on_view_changed_switcher(self, mode_str):
         self.current_view_mode = mode_str
@@ -528,47 +549,65 @@ class MainWindow(QMainWindow):
     def save_chart_to_file(self):
         target_canvas = self.bar_canvas if self.tabs.currentIndex() == 0 else self.curve_canvas
         fname = f"Chart_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-        path, _ = QFileDialog.getSaveFileName(self, "Save Image", fname, "Images (*.png *.jpg *.pdf *.svg)")
+        path, _ = QFileDialog.getSaveFileName(self, "保存图片", fname, "Images (*.png *.jpg *.pdf *.svg)")
         if path:
             try:
-                target_canvas.fig.savefig(path, dpi=300, bbox_inches='tight')
-                self.lbl_status.setText(f"Saved: {Path(path).name}")
-                QMessageBox.information(self, "Success", "Saved.")
-            except Exception as e:
-                QMessageBox.critical(self, "Error", str(e))
+                target_canvas.fig.savefig(path, dpi=300, bbox_inches="tight")
+                self.lbl_status.setText(f"图片已保存：{Path(path).name}")
+                QMessageBox.information(self, "保存成功", "图片已成功保存。")
+            except Exception as exc:
+                QMessageBox.critical(self, "保存失败", str(exc))
 
     def export_data(self):
-        if not self.current_results: return
-        is_tensile = "Tensile" in self.combo_mode.currentText()
+        if not self.current_results:
+            QMessageBox.information(self, "导出报告", "当前还没有可导出的分析数据。")
+            return
+
+        is_tensile = "Tensile" in self.combo_mode.currentText() or "抗拉" in self.combo_mode.currentText()
         date_str = datetime.now().strftime("%Y%m%d")
         default_name = f"Tensile_Report_{date_str}.xlsx" if is_tensile else f"Compressive_Report_{date_str}.xlsx"
 
         items = []
         if is_tensile:
             for r in range(self.table.rowCount()):
-                if self.table.item(r, 0).checkState() == Qt.Checked:
-                    d = self.table.item(r, 0).data(Qt.UserRole)
-                    if isinstance(d, dict): items.append(d)
+                check_item = self.table.item(r, 0)
+                if check_item and check_item.checkState() == Qt.Checked:
+                    data = check_item.data(Qt.UserRole)
+                    if isinstance(data, dict):
+                        items.append(data)
         else:
             names = set()
             for r in range(self.table.rowCount()):
-                if self.table.item(r, 0).checkState() == Qt.Checked:
-                    names.add(self.table.item(r, 1).text())
+                check_item = self.table.item(r, 0)
+                name_item = self.table.item(r, 1)
+                if check_item and name_item and check_item.checkState() == Qt.Checked:
+                    names.add(name_item.text())
             for res in self.current_results:
-                if str(res.get("Sample ID", "")).strip() in names: items.append(res)
+                if str(res.get("Sample ID", "")).strip() in names:
+                    items.append(res)
 
         if not items:
-            QMessageBox.warning(self, "Export", "No selection.")
+            QMessageBox.warning(self, "导出报告", "请先勾选需要导出的样品。")
             return
 
-        path, _ = QFileDialog.getSaveFileName(self, "Export", default_name, "Excel (*.xlsx)")
-        if path:
-            self.lbl_status.setText("Exporting...")
-            QApplication.processEvents()
-            DataExporter.export_excel(items, Path(path))
-            self.lbl_status.setText("Done.")
-            QMessageBox.information(self, "Success", f"Exported {len(items)} samples.")
+        path, _ = QFileDialog.getSaveFileName(self, "导出 Excel 报告", default_name, "Excel (*.xlsx)")
+        if not path:
+            return
 
+        self.lbl_status.setText("正在导出 Excel 报告...")
+        QApplication.processEvents()
+
+        ok = DataExporter.export_excel(items, Path(path))
+        if ok:
+            self.lbl_status.setText("导出完成。")
+            QMessageBox.information(self, "导出成功", f"已导出 {len(items)} 个样品。")
+        else:
+            self.lbl_status.setText("导出失败。")
+            QMessageBox.critical(
+                self,
+                "导出失败",
+                "导出失败。请先关闭目标 Excel 文件，并确认目标文件夹可写。",
+            )
     def delete_checked_items(self):
         is_tensile = "Tensile" in self.combo_mode.currentText()
         removed = 0
@@ -693,36 +732,37 @@ class MainWindow(QMainWindow):
 
     # --- Statistics Methods ---
     def refresh_statistics_from_selection(self):
-        if "Tensile" not in self.combo_mode.currentText(): return
-        sel = {}
+        if "Tensile" not in self.combo_mode.currentText() and "抗拉" not in self.combo_mode.currentText():
+            return
+        selected = {}
         for r in range(self.table.rowCount()):
-            if self.table.item(r, 0).checkState() == Qt.Checked:
-                d = self.table.item(r, 0).data(Qt.UserRole)
-                if isinstance(d, dict):
-                    f = d["Source File"]
-                    if f not in sel: sel[f] = []
-                    sel[f].append(d)
+            item = self.table.item(r, 0)
+            if item and item.checkState() == Qt.Checked:
+                data = item.data(Qt.UserRole)
+                if isinstance(data, dict):
+                    source = data["Source File"]
+                    selected.setdefault(source, []).append(data)
 
-        if not sel:
-            QMessageBox.information(self, "Info", "Select items.")
+        if not selected:
+            QMessageBox.information(self, "统计", "请先勾选至少一个样品。")
             return
 
-        self.group_stats_data = {f: StatisticsCalculator.get_group_stats(items) for f, items in sel.items()}
+        self.group_stats_data = {f: StatisticsCalculator.get_group_stats(items) for f, items in selected.items()}
         self.plot_tensile_bars()
 
-        v = self.current_view_mode
+        view = self.current_view_mode
         for r in range(self.table.rowCount()):
-            if self.table.item(r, 0).text() == "AVG":
-                f = self.table.item(r, 0).data(Qt.UserRole)
-                if f in self.group_stats_data:
-                    self._update_summary_row_values(r, self.group_stats_data[f], v, False)
-                    self._update_summary_row_values(r + 1, self.group_stats_data[f], v, True)
+            item = self.table.item(r, 0)
+            if item and item.text() == "AVG":
+                source = item.data(Qt.UserRole)
+                if source in self.group_stats_data:
+                    self._update_summary_row_values(r, self.group_stats_data[source], view, False)
+                    self._update_summary_row_values(r + 1, self.group_stats_data[source], view, True)
                 else:
                     self._clear_summary_row(r)
                     self._clear_summary_row(r + 1)
         self.check_overlay_status()
 
-    # --- Table Data Helpers ---
     def _create_item(self, text, is_header=False, align=Qt.AlignCenter):
         item = QTableWidgetItem(str(text))
         item.setTextAlignment(align)
@@ -735,31 +775,40 @@ class MainWindow(QMainWindow):
             item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
         return item
 
+    def _basic_metric_spec(self):
+        return [
+            ("E_eff (GPa)", ".2f", "有效模量\nE_eff (GPa)"),
+            ("First Crack Strength (MPa)", ".2f", "初裂强度\nσ_cr (MPa)"),
+            ("Ultimate Stress (MPa)", ".2f", "峰值强度\nσ_u (MPa)"),
+            ("Peak Strain (%)", ".2f", "峰值应变\nε_peak (%)"),
+            ("Ultimate Strain (%)", ".2f", "极限应变\nε_u (%)"),
+        ]
+
+    def _advanced_metric_spec(self):
+        return [
+            ("E_init (GPa)", ".2f", "初始模量\nE_init (GPa)"),
+            ("Fracture Energy (kJ/m²)", ".1f", "断裂能指标\nG_F (kJ/m²)"),
+            ("Hardening Capacity (%)", ".2f", "硬化容量\nΔε_sh (%)"),
+            ("Plateau Stability (CV)", ".2e", "平台波动\nCV_σ"),
+        ]
+
+    def _current_tensile_metric_spec(self):
+        return self._basic_metric_spec() if "Basic" in self.current_view_mode else self._advanced_metric_spec()
+
     def _add_tensile_row(self, d, keep_ids):
         r = self.table.rowCount()
         self.table.insertRow(r)
 
-        it = self._create_item("", is_header=False, align=Qt.AlignLeft | Qt.AlignVCenter)
-        it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsSelectable)
-        it.setCheckState(Qt.Unchecked if keep_ids and id(d) in keep_ids else Qt.Checked)
-        it.setData(Qt.UserRole, d)
-        self.table.setItem(r, 0, it)
-
+        check_item = self._create_item("", is_header=False, align=Qt.AlignLeft | Qt.AlignVCenter)
+        check_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsSelectable)
+        check_item.setCheckState(Qt.Unchecked if keep_ids and id(d) in keep_ids else Qt.Checked)
+        check_item.setData(Qt.UserRole, d)
+        self.table.setItem(r, 0, check_item)
         self.table.setItem(r, 1, self._create_item(d.get("Sample ID", "Unknown"), align=Qt.AlignLeft | Qt.AlignVCenter))
 
-        v = self.current_view_mode
-        if "Basic" in v:
-            vals = [d.get('E_eff (GPa)', 0), d.get('First Crack Strength (MPa)', 0),
-                    d.get('Ultimate Stress (MPa)', 0), d.get('Ultimate Strain (%)', 0)]
-            fmts = [".2f", ".2f", ".2f", ".2f"]
-        else:
-            vals = [d.get('E_init (GPa)', 0), d.get('Fracture Energy (kJ/m²)', 0),
-                    d.get('Hardening Capacity (%)', 0), d.get('Plateau Stability (CV)', 0)]
-            fmts = [".2f", ".1f", ".2f", ".2e"]
-
-        for i, val in enumerate(vals):
-            txt = self._format_value(val, fmts[i])
-            self.table.setItem(r, 2 + i, self._create_item(txt, align=Qt.AlignCenter))
+        for i, (key, fmt, _) in enumerate(self._current_tensile_metric_spec()):
+            value = d.get(key, 0)
+            self.table.setItem(r, 2 + i, self._create_item(self._format_value(value, fmt), align=Qt.AlignCenter))
 
     def _add_tensile_summary_row(self, f, stats):
         bg = QBrush(QColor("#f8f9fa"))
@@ -795,24 +844,18 @@ class MainWindow(QMainWindow):
                 self.table.setItem(row, c, it)
 
     def _update_summary_row_values(self, r, s, v, is_sd):
-        if "Basic" in v:
-            keys = ["E_eff (GPa)", "First Crack Strength (MPa)", "Ultimate Stress (MPa)", "Ultimate Strain (%)"]
-            fmts = [".2f", ".2f", ".2f", ".2f"]
-        else:
-            keys = ["E_init (GPa)", "Fracture Energy (kJ/m²)", "Hardening Capacity (%)", "Plateau Stability (CV)"]
-            fmts = [".2f", ".1f", ".2f", ".2e"]
+        spec = self._basic_metric_spec() if "Basic" in v else self._advanced_metric_spec()
+        suffix = "_sd" if is_sd else "_mean"
 
-        suff = "_sd" if is_sd else "_mean"
-        for i, k in enumerate(keys):
-            val = s.get(k + suff, 0)
-            txt = self._format_value(val, fmts[i])
+        for i, (key, fmt, _) in enumerate(spec):
+            value = s.get(key + suffix, 0)
+            txt = self._format_value(value, fmt)
             disp = f"± {txt}" if is_sd else txt
             item = self._create_item(disp, is_header=True, align=Qt.AlignCenter)
-            item.setBackground(QBrush(QColor("#f8f9fa")))
             if not is_sd:
-                f = QFont()
-                f.setBold(True)
-                item.setFont(f)
+                font = item.font()
+                font.setBold(True)
+                item.setFont(font)
             self.table.setItem(r, 2 + i, item)
 
     def plot_tensile_bars(self):
@@ -820,29 +863,20 @@ class MainWindow(QMainWindow):
             self.bar_canvas.clear_plot()
             return
 
-        v = self.current_view_mode
+        spec = self._current_tensile_metric_spec()
+        groups = list(self.group_stats_data.keys())
+        clean_names = [Path(g).stem[:15] for g in groups]
 
-        if "Basic" in v:
-            p = [("E_eff (GPa)", "E_eff (GPa)"),
-                 ("First Crack Strength (MPa)", "First Crack Strength (MPa)"),
-                 ("Ultimate Stress (MPa)", "Ultimate Stress (MPa)"),
-                 ("Ultimate Strain (%)", "Ultimate Strain (%)")]
-        else:
-            p = [("E_init (GPa)", "E_init (GPa)"),
-                 ("Fracture Energy (kJ/m²)", "Fracture Energy (kJ/m²)"),
-                 ("Hardening Capacity (%)", "Hardening Capacity (%)"),
-                 ("Plateau Stability (CV)", "Plateau Stability (CV)")]
+        metrics_data = {}
+        for group, clean_name in zip(groups, clean_names):
+            stats = self.group_stats_data[group]
+            metrics_data[clean_name] = {
+                "means": [stats.get(key + "_mean", 0) for key, _, _ in spec],
+                "stds": [stats.get(key + "_sd", 0) for key, _, _ in spec],
+            }
 
-        grps = list(self.group_stats_data.keys())
-        clean = [Path(g).stem[:15] for g in grps]
-
-        m = {}
-        for g, c in zip(grps, clean):
-            s = self.group_stats_data[g]
-            m[c] = {'means': [s.get(x[0] + "_mean", 0) for x in p], 'stds': [s.get(x[0] + "_sd", 0) for x in p]}
-
-        param_labels = [x[1] for x in p]
-        self.bar_canvas.plot_grouped_statistics(clean, m, param_labels)
+        labels = [key for key, _, _ in spec]
+        self.bar_canvas.plot_grouped_statistics(clean_names, metrics_data, labels)
 
     def _process_compressive_stats(self, keep_ids):
         grps = {}
@@ -886,30 +920,21 @@ class MainWindow(QMainWindow):
             self.table.setItem(r, c, QTableWidgetItem("-"))
 
     def _refresh_headers(self):
-        m = self.combo_mode.currentText()
-        v = self.current_view_mode
-        b = ["Show", "Sample"]
+        mode = self.combo_mode.currentText()
+        base_headers = ["显示", "样品"]
 
-        # [优化] 使用换行符实现双行表头，大幅缩小横向占宽
-        if "Tensile" in m:
-            if "Basic" in v:
-                d = ["Modulus\nE_eff (GPa)", "First Crack\nσ_cr (MPa)", "Ultimate\nσ_u (MPa)", "Strain\nε_tu (%)"]
-            else:
-                d = ["Init Modulus\nE_init (GPa)", "Fracture Energy\nG_F (kJ/m²)", "Capacity\nΔε_sh (%)",
-                     "Stability\nCV_σ"]
+        if "Tensile" in mode or "抗拉" in mode:
+            metric_headers = [label for _, _, label in self._current_tensile_metric_spec()]
         else:
-            d = ["Mean Strength\nσ_mean (MPa)", "Std Dev\nSD (MPa)", "Count\nN"]
+            metric_headers = ["平均强度\nσ_mean (MPa)", "标准差\nSD (MPa)", "数量\nN"]
 
-        self.table.setColumnCount(len(b) + len(d))
-        self.table.setHorizontalHeaderLabels(b + d)
-
-        # [优化] 提升表头高度并缩紧第一列
-        self.table.horizontalHeader().setMinimumHeight(46)
-        self.table.setColumnWidth(0, 45)
-
+        self.table.setColumnCount(len(base_headers) + len(metric_headers))
+        self.table.setHorizontalHeaderLabels(base_headers + metric_headers)
+        self.table.horizontalHeader().setMinimumHeight(48)
+        self.table.setColumnWidth(0, 48)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        for i in range(2, len(b) + len(d)):
+        for i in range(2, len(base_headers) + len(metric_headers)):
             self.table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeToContents)
 
     def _repopulate_table_and_charts(self, preserved_ids=set()):

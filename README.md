@@ -54,7 +54,7 @@ python main.py
 当前正式运行入口为：
 
 ```text
-main.py → app/ui/main_window_active.py
+main.py → app/ui/main_window.py
 ```
 
 ### 3. 运行核心测试
@@ -514,8 +514,7 @@ visualization:
 ```mermaid
 flowchart LR
     subgraph UI["app/ui"]
-        A1["main_window_active.py\n当前正式运行窗口"]
-        A2["main_window.py\n基础窗口"]
+        A1["main_window.py\n主窗口"]
         A3["dialogs.py\n参数设置"]
         A4["plotting.py\nMatplotlib 绘图"]
     end
@@ -532,7 +531,6 @@ flowchart LR
         C4["validators.py\n数据校验"]
     end
 
-    A1 --> A2
     A1 --> A3
     A1 --> A4
     A1 --> B1
@@ -606,8 +604,7 @@ ECC_Analyzer_Pro/
     │   ├── loader.py               # Excel/CSV 读取
     │   └── exporter.py             # Excel 导出
     └── ui/
-        ├── main_window.py          # 基础窗口实现
-        ├── main_window_active.py   # 当前正式运行窗口
+        ├── main_window.py          # 主窗口
         ├── plotting.py             # Matplotlib 绘图
         └── dialogs.py              # 参数设置窗口
 ```
