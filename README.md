@@ -11,7 +11,7 @@
 
 用于曲线批量读取、应变单位统一、初裂点识别、峰后极限应变计算、能量指标统计与 Excel 报告导出。
 
-[快速开始](#快速开始) · [数据格式](#数据格式) · [计算逻辑与公式](#计算逻辑与公式) · [软件架构](#软件架构) · [界面说明](#界面说明) · [用户指南](USER_GUIDE.md)
+[快速开始](#快速开始) · [数据格式](#数据格式) · [计算逻辑与公式](#计算逻辑与公式) · [软件架构](#软件架构) · [界面说明](#界面说明)
 
 </div>
 
@@ -26,7 +26,7 @@
 1. **抗拉 stress-strain 曲线**：自动识别初裂强度、峰值强度、峰值应变、极限应变、硬化容量与能量指标；
 2. **抗压强度或抗压曲线**：支持完整曲线，也支持“组名 + 多个强度值”的汇总表。
 
-这个项目的定位不是替代 Origin、Excel 或商业试验软件，而是作为一个更贴近 ECC / SHCC 论文数据处理流程的 `research analysis assistant`，用于减少人工判读差异，提高同一批试验数据之间的可比性。
+这个项目的定位不是替代 Origin、Excel 或商业试验软件，而是作为一个更贴近 ECC / SHCC 论文数据处理流程的科研分析工具，用于减少人工判读差异，提高同一批试验数据之间的可比性。
 
 ---
 
@@ -491,7 +491,7 @@ modulus:
   elastic_upper_ratio: 0.40
 
 first_cracking:
-  crack_tolerance_base: 0.03
+  crack_tolerance_base: 0.05
   crack_tolerance_ratio: 0.01
   stiffness_constraint: 0.85
   min_stress_ratio: 0.10
@@ -542,55 +542,12 @@ flowchart LR
     C1 --> C2
 ```
 
-### 用户操作时序
-
-```mermaid
-sequenceDiagram
-    actor User as 用户
-    participant UI as PySide6 界面
-    participant Loader as DataLoader
-    participant Analyzer as Tensile/Compressive Analyzer
-    participant Stats as StatisticsCalculator
-    participant Plot as MplCanvas
-    participant Exporter as DataExporter
-
-    User->>UI: 拖拽或选择 Excel/CSV
-    UI->>Loader: 智能解析 sheet 和样品列
-    Loader-->>UI: 返回 strain / stress 样品列表
-    UI->>Analyzer: 对每个样品运行力学分析
-    Analyzer-->>UI: 返回 σcr / σu / εpeak / εu / GF
-    UI->>Stats: 对勾选样品计算均值与标准差
-    Stats-->>UI: 返回 mean / SD / COV
-    UI->>Plot: 绘制曲线与统计图
-    User->>UI: 勾选样品并导出
-    UI->>Exporter: 写入 Excel 报告
-    Exporter-->>User: 导出分析结果
-```
-
-### 状态逻辑
-
-```mermaid
-stateDiagram-v2
-    [*] --> Ready: 启动软件
-    Ready --> Loading: 导入文件
-    Loading --> Analyzing: 读取到有效数据
-    Loading --> Ready: 未识别到有效数据
-    Analyzing --> Visualizing: 计算完成
-    Visualizing --> Configuring: 打开参数设置
-    Configuring --> Analyzing: 保存参数并重新计算
-    Visualizing --> Exporting: 导出报告
-    Exporting --> Visualizing: 导出完成
-    Exporting --> Visualizing: 导出失败并提示
-    Visualizing --> Ready: 清空数据
-```
-
 ### 当前项目结构
 
 ```text
 ECC_Analyzer_Pro/
 ├── main.py                         # 程序入口
 ├── README.md                       # 项目说明
-├── USER_GUIDE.md                   # 用户指南
 ├── requirements.txt
 ├── scripts/
 │   └── smoke_test.py               # 核心算法测试
@@ -660,6 +617,14 @@ Sample Group, σ_mean, SD, COV, N
 ```
 
 如果目标 Excel 文件正在打开，软件会提示导出失败。
+
+---
+
+## 常见问题
+
+- **应变或模量相差约 100 倍**：检查“参数设置”中的输入应变单位，百分数数据选择 `Percent`，小数应变选择 `Decimal`。
+- **导入后没有有效数据**：检查是否选择了正确的抗拉/抗压模式，以及数据列、表头和数值内容是否符合上面的示例。
+- **无法导出 Excel**：关闭已打开的同名文件，或更换可写的保存目录。
 
 ---
 
