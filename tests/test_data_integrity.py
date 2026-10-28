@@ -26,3 +26,17 @@ def test_malformed_csv_is_reported(tmp_path):
     assert samples is None
     assert error is not None
     assert "CSV Parse Error" in error
+
+
+def test_export_keeps_duplicate_sample_names():
+    from app.data.exporter import DataExporter
+
+    samples = [
+        {"Sample ID": "A", "raw_strain": np.array([0.0, 0.01]), "raw_stress": np.array([0.0, 1.0])},
+        {"Sample ID": "A", "raw_strain": np.array([0.0, 0.02]), "raw_stress": np.array([0.0, 2.0])},
+    ]
+    data = DataExporter._make_tensile_raw_df(samples)
+    assert data.shape == (2, 4)
+    assert data.columns.is_unique
+    assert data.iloc[1, 1] == 1.0
+    assert data.iloc[1, 3] == 2.0

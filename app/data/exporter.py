@@ -80,19 +80,27 @@ class DataExporter:
         raw_dict = {}
         max_len = 0
         arrays = []
+        used_names = set()
 
         for item in data_list:
             strain = item.get("raw_strain")
             stress = item.get("raw_stress")
-            name = str(item.get("Sample ID", "Sample")).strip()
+            name = str(item.get("Sample ID", "Sample")).strip() or "Sample"
 
             if strain is not None and stress is not None and len(strain) > 0:
                 strain = np.array(strain).flatten()
                 stress = np.array(stress).flatten()
                 strain_pct = strain * 100.0
 
-                col_strain = f"{name} - ε (%)"
-                col_stress = f"{name} - σ (MPa)"
+                unique_name = name
+                suffix = 2
+                while unique_name in used_names:
+                    unique_name = f"{name} ({suffix})"
+                    suffix += 1
+                used_names.add(unique_name)
+
+                col_strain = f"{unique_name} - ε (%)"
+                col_stress = f"{unique_name} - σ (MPa)"
                 arrays.append((col_strain, strain_pct))
                 arrays.append((col_stress, stress))
                 max_len = max(max_len, len(strain_pct))

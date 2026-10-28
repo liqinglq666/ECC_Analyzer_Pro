@@ -521,8 +521,20 @@ class MainWindow(QMainWindow):
         self.on_view_changed()
 
     def on_view_changed(self):
+        unchecked_ids = set()
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            if item is not None and (item.flags() & Qt.ItemIsUserCheckable) and item.checkState() == Qt.Unchecked:
+                result = item.data(Qt.UserRole)
+                if isinstance(result, dict):
+                    unchecked_ids.add(id(result))
+
+        current_tab = self.tabs.currentIndex()
         self._refresh_headers()
-        self._repopulate_table_and_charts()
+        self._repopulate_table_and_charts(unchecked_ids)
+        if self.current_results:
+            self.refresh_statistics_from_selection()
+        self.tabs.setCurrentIndex(current_tab)
 
     def on_mode_changed(self, index=0):
         self._clear_all_data()
@@ -633,10 +645,10 @@ class MainWindow(QMainWindow):
                 self.table.blockSignals(False)
                 return
 
-            for d in del_list:
-                if d in self.current_results:
-                    self.current_results.remove(d)
-                    removed += 1
+            removed_ids = {id(d) for d in del_list}
+            old_count = len(self.current_results)
+            self.current_results = [d for d in self.current_results if id(d) not in removed_ids]
+            removed = old_count - len(self.current_results)
 
             if removed: self._repopulate_table_and_charts(keep_ids)
         else:
@@ -744,7 +756,15 @@ class MainWindow(QMainWindow):
                     selected.setdefault(source, []).append(data)
 
         if not selected:
-            QMessageBox.information(self, "统计", "请先勾选至少一个样品。")
+            self.group_stats_data = {}
+            for row in range(self.table.rowCount()):
+                item = self.table.item(row, 0)
+                if item is not None and item.text() == "AVG":
+                    self._clear_summary_row(row)
+                    self._clear_summary_row(row + 1)
+            self.bar_canvas.clear_plot()
+            self.bar_canvas.draw()
+            self.check_overlay_status()
             return
 
         self.group_stats_data = {f: StatisticsCalculator.get_group_stats(items) for f, items in selected.items()}
@@ -937,20 +957,23 @@ class MainWindow(QMainWindow):
         for i in range(2, len(base_headers) + len(metric_headers)):
             self.table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeToContents)
 
-    def _repopulate_table_and_charts(self, preserved_ids=set()):
+    def _repopulate_table_and_charts(self, preserved_ids=None):
+        if preserved_ids is None:
+            preserved_ids = set()
+
         self.table.setUpdatesEnabled(False)
         self.table.blockSignals(True)
         self.table_loading = True
-        self.table.setRowCount(0)
-
-        if "Tensile" in self.combo_mode.currentText():
-            self._process_tensile_stats(preserved_ids)
-        else:
-            self._process_compressive_stats(preserved_ids)
-
-        self.table_loading = False
-        self.table.blockSignals(False)
-        self.table.setUpdatesEnabled(True)
+        try:
+            self.table.setRowCount(0)
+            if "Tensile" in self.combo_mode.currentText():
+                self._process_tensile_stats(preserved_ids)
+            else:
+                self._process_compressive_stats(preserved_ids)
+        finally:
+            self.table_loading = False
+            self.table.blockSignals(False)
+            self.table.setUpdatesEnabled(True)
 
     def _process_tensile_stats(self, keep_ids):
         grps = {}
